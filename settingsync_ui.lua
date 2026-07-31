@@ -38,6 +38,7 @@ local DiffViewer = InputContainer:extend{
     category = nil,      -- optional Categories.* table for display labels/formatters
     on_apply = nil,      -- callback(selections) called when user confirms
     selections = nil,    -- { [idx] = "pull"|"push"|nil }
+    scrollable = nil,    -- ScrollableContainer reference for scroll-position preservation
 }
 
 function DiffViewer:init()
@@ -88,7 +89,7 @@ function DiffViewer:buildUI()
         elseif entry.status == Diff.MODIFIED then n_modified = n_modified + 1
         end
     end
-    local summary = string.format(_("%d changed: %d modified, %d local only, %d cloud only"),
+    local summary = string.format(_("%d changed: %d ≠ modified, %d ↑ local only, %d ↓ cloud only"),
         #self.changes, n_modified, n_added, n_removed)
     local summary_widget = TextWidget:new{
         text = summary,
@@ -96,16 +97,23 @@ function DiffViewer:buildUI()
         max_width = inner_width,
     }
 
+    -- Usage hint
+    local hint_widget = TextBoxWidget:new{
+        text = _("Tap a row to select: ⬇ Pull = take cloud value · ⬆ Push = send local value"),
+        face = text_font,
+        width = inner_width,
+    }
+
     -- Build per-key rows
     local rows = VerticalGroup:new{ border_size = 0 }
     for idx, entry in ipairs(self.changes) do
         local status_icon
         if entry.status == Diff.MODIFIED then
-            status_icon = "≠"
+            status_icon = "≠"  -- modified on both sides
         elseif entry.status == Diff.ADDED then
-            status_icon = "+"  -- local only
+            status_icon = "↑"  -- local only (natural to push)
         elseif entry.status == Diff.REMOVED then
-            status_icon = "−"  -- cloud only
+            status_icon = "↓"  -- cloud only (natural to pull)
         end
 
         -- Key name and status
@@ -143,11 +151,11 @@ function DiffViewer:buildUI()
         local sel = self.selections[idx]
         local sel_text
         if sel == "pull" then
-            sel_text = _("⬇ PULL from cloud")
+            sel_text = _("⬇ Pull from cloud")
         elseif sel == "push" then
-            sel_text = _("⬆ PUSH to cloud")
+            sel_text = _("⬆ Push to cloud")
         else
-            sel_text = _("  (tap to select action)")
+            sel_text = _("  ─ tap to select")
         end
         local sel_widget = TextWidget:new{
             text = sel_text,
@@ -230,6 +238,7 @@ function DiffViewer:buildUI()
     local content_height = self.height
         - title_widget:getSize().h
         - summary_widget:getSize().h
+        - hint_widget:getSize().h
         - Size.padding.default * 4
         - Size.line.thick  -- separator
         - buttons:getSize().h
@@ -242,6 +251,8 @@ function DiffViewer:buildUI()
             rows,
         },
     }
+    self.scrollable = scrollable
+    self.cropping_widget = scrollable
 
     local content = VerticalGroup:new{
         align = "left",
@@ -252,6 +263,10 @@ function DiffViewer:buildUI()
         CenterContainer:new{
             dimen = Geom:new{ w = inner_width, h = summary_widget:getSize().h },
             summary_widget,
+        },
+        CenterContainer:new{
+            dimen = Geom:new{ w = inner_width, h = hint_widget:getSize().h },
+            hint_widget,
         },
         VerticalSpan:new{ width = Size.padding.default },
         LineWidget:new{
@@ -309,8 +324,12 @@ function DiffViewer:clearSelections()
 end
 
 function DiffViewer:refreshUI()
+    local saved_y = self.scrollable and self.scrollable._scroll_offset_y or 0
     UIManager:close(self)
     self:buildUI()
+    if self.scrollable and saved_y > 0 then
+        self.scrollable._scroll_offset_y = saved_y
+    end
     UIManager:show(self)
 end
 

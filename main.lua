@@ -150,75 +150,75 @@ function SettingSync:addToMainMenu(menu_items)
     menu_items.settingsync = {
         text = _("SettingSync"),
         sorting_hint = "tools",
-        sub_item_table = {
-            {
-                text_func = function()
-                    local server = self.settings:readSetting("sync_server")
-                    if server then
-                        return _("Cloud service: ") .. server.name
-                    end
-                    return _("Configure cloud service")
-                end,
-                callback = function(touchmenu_instance)
-                    self:showCloudConfig(touchmenu_instance)
-                end,
-                keep_menu_open = true,
-                separator = true,
-            },
-            {
-                text_func = function()
-                    return string.format(_("Device: %s"),
-                        Devices.currentName(self.settings))
-                end,
-                callback = function()
-                    self:showDeviceNameDialog()
-                end,
-                keep_menu_open = true,
-                separator = true,
-            },
-            {
-                text = _("Sync by category"),
-                enabled_func = function()
-                    return self.settings:readSetting("sync_server") ~= nil
-                end,
-                sub_item_table_func = function()
-                    return self:buildCategoryMenu()
-                end,
-            },
-            {
-                text = _("Diff & sync settings…"),
-                callback = function()
-                    self:diffAndSync()
-                end,
-                enabled_func = function()
-                    return self.settings:readSetting("sync_server") ~= nil
-                end,
-            },
-            {
-                text = _("Quick push all to cloud"),
-                callback = function()
-                    self:quickSync("push")
-                end,
-                enabled_func = function()
-                    return self.settings:readSetting("sync_server") ~= nil
-                end,
-            },
-            {
-                text = _("Quick pull all from cloud"),
-                callback = function()
-                    self:quickSync("pull")
-                end,
-                enabled_func = function()
-                    return self.settings:readSetting("sync_server") ~= nil
-                end,
-                separator = true,
-            },
-            {
-                text = _("Sync scope"),
-                sub_item_table = self:buildScopeMenu(),
-            },
+        sub_item_table_func = function() return self:buildMainMenu() end,
+    }
+end
+
+--- Build the top-level sub-menu items dynamically so that category entries
+--- are injected inline (no extra submenu depth).
+function SettingSync:buildMainMenu()
+    local server_ok = function()
+        return self.settings:readSetting("sync_server") ~= nil
+    end
+
+    local items = {
+        {
+            text_func = function()
+                local sv = self.settings:readSetting("sync_server")
+                return sv and (_("Cloud: ") .. sv.name) or _("Configure cloud service…")
+            end,
+            callback = function(touchmenu_instance)
+                self:showCloudConfig(touchmenu_instance)
+            end,
+            keep_menu_open = true,
+        },
+        {
+            text_func = function()
+                return _("Device: ") .. Devices.currentName(self.settings)
+            end,
+            callback = function()
+                self:showDeviceNameDialog()
+            end,
+            keep_menu_open = true,
+            separator = true,
         },
     }
+
+    for _i, cat in ipairs(Categories.ALL) do
+        local c = cat
+        table.insert(items, {
+            text = string.format(_("Sync: %s"), c.label),
+            callback = function() self:syncCategory(c) end,
+            enabled_func = server_ok,
+        })
+    end
+
+    table.insert(items, {
+        text = _("Compare & sync all settings…"),
+        callback = function() self:diffAndSync() end,
+        enabled_func = server_ok,
+        separator = true,
+    })
+
+    table.insert(items, {
+        text = _("Push all to cloud"),
+        callback = function() self:quickSync("push") end,
+        enabled_func = server_ok,
+    })
+
+    table.insert(items, {
+        text = _("Pull all from cloud"),
+        callback = function() self:quickSync("pull") end,
+        enabled_func = server_ok,
+        separator = true,
+    })
+
+    table.insert(items, {
+        text = _("Sync scope"),
+        sub_item_table = self:buildScopeMenu(),
+    })
+
+    return items
 end
 
 function SettingSync:buildScopeMenu()
@@ -283,25 +283,11 @@ local function writeSettingsData(path, data)
     local util = require("util")
     local dir = path:match("(.*/)")
     if dir and lfs.attributes(dir, "mode") ~= "directory" then
-        os.execute('mkdir -p "' .. dir .. '"')
+        lfs.mkdir(dir)
     end
     util.writeToFile(dump(data, nil, true), path, true, true)
 end
 
---- Build per-category menu items for the "Sync by category" submenu.
-function SettingSync:buildCategoryMenu()
-    local items = {}
-    for _i, category in ipairs(Categories.ALL) do
-        local cat = category  -- capture for closure
-        table.insert(items, {
-            text = string.format(_("Sync: %s"), cat.label),
-            callback = function()
-                self:syncCategory(cat)
-            end,
-        })
-    end
-    return items
-end
 
 --- Show the InputDialog for setting/changing the device name.
 function SettingSync:showDeviceNameDialog()
@@ -447,7 +433,7 @@ function SettingSync:_doCategorySync(category, target_device_name)
         local my_name = Devices.currentName(self.settings)
         local label = string.format(_("Sync: %s"), category.label)
             .. " (" .. target_device_name .. " → " .. my_name .. ")"
-            .. " — " .. #changes .. _(" changes)")
+            .. " — " .. #changes .. _(" changes")
 
         local viewer = DiffViewer:new{
             diff = diff,
@@ -714,7 +700,7 @@ function SettingSync:showDiffChain(all_diffs, index)
     local item = all_diffs[index]
     local viewer = DiffViewer:new{
         diff = item.diff,
-        source_label = item.source.label .. " (" .. #item.changes .. _(" changes)"),
+        source_label = item.source.label .. " (" .. #item.changes .. _(" changes") .. ")",
         on_apply = function(selections)
             self:applyDiffSelections(item, selections)
             -- Continue to next source

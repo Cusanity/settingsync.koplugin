@@ -34,20 +34,20 @@ msgid "Plugin config: %s"
 msgstr "外掛組態：%s"
 
 #: main.lua - main menu
-msgid "Cloud service: "
-msgstr "雲端服務："
+msgid "Cloud: "
+msgstr "雲端："
 
-msgid "Configure cloud service"
-msgstr "設定雲端服務"
+msgid "Configure cloud service…"
+msgstr "設定雲端服務…"
 
-msgid "Diff & sync settings…"
-msgstr "比對並同步設定…"
+msgid "Compare & sync all settings…"
+msgstr "比對並同步全部設定…"
 
-msgid "Quick push all to cloud"
-msgstr "快速推送全部至雲端"
+msgid "Push all to cloud"
+msgstr "推送全部至雲端"
 
-msgid "Quick pull all from cloud"
-msgstr "快速從雲端拉取全部"
+msgid "Pull all from cloud"
+msgstr "從雲端拉取全部"
 
 msgid "Sync scope"
 msgstr "同步範圍"
@@ -93,8 +93,8 @@ msgstr "正在從雲端下載設定…"
 msgid "All settings are in sync!"
 msgstr "所有設定已同步！"
 
-msgid " changes)"
-msgstr " 項變更)"
+msgid " changes"
+msgstr " 項變更"
 
 msgid "Sync complete."
 msgstr "同步完成。"
@@ -128,17 +128,20 @@ msgstr "本機與雲端設定無差異。"
 msgid "Settings Diff"
 msgstr "設定比對"
 
-msgid "%d changed: %d modified, %d local only, %d cloud only"
+msgid "%d changed: %d ≠ modified, %d ↑ local only, %d ↓ cloud only"
 msgstr "%d 項變更：%d 項修改，%d 項僅本機，%d 項僅雲端"
 
-msgid "⬇ PULL from cloud"
+msgid "Tap a row to select: ⬇ Pull = take cloud value · ⬆ Push = send local value"
+msgstr "點擊列選擇：⬇ 拉取 = 取雲端值 · ⬆ 推送 = 傳送本機值"
+
+msgid "⬇ Pull from cloud"
 msgstr "⬇ 從雲端拉取"
 
-msgid "⬆ PUSH to cloud"
+msgid "⬆ Push to cloud"
 msgstr "⬆ 推送至雲端"
 
-msgid "  (tap to select action)"
-msgstr "  （點擊選擇操作）"
+msgid "  ─ tap to select"
+msgstr "  ─ 點擊選擇"
 
 msgid "Pull all"
 msgstr "全部拉取"
@@ -168,8 +171,8 @@ msgstr "雲端："
 msgid "Gestures"
 msgstr "手勢"
 
-msgid "Touch gesture mappings and timing settings"
-msgstr "觸控手勢對映和計時設定"
+msgid "Touch gesture action mappings"
+msgstr "觸控手勢動作對映"
 
 msgid "File manager gesture map"
 msgstr "檔案管理器手勢對映"
@@ -177,66 +180,21 @@ msgstr "檔案管理器手勢對映"
 msgid "Reader gesture map"
 msgstr "閱讀器手勢對映"
 
-msgid "Tap interval (ms)"
-msgstr "點擊間隔 (毫秒)"
-
-msgid "Double-tap interval (ms)"
-msgstr "雙擊間隔 (毫秒)"
-
-msgid "Hold interval (ms)"
-msgstr "長按間隔 (毫秒)"
-
-msgid "Swipe interval (ms)"
-msgstr "滑動間隔 (毫秒)"
-
-msgid "Tap interval on keyboard (ms)"
-msgstr "鍵盤點擊間隔 (毫秒)"
-
-msgid "Two-finger tap duration (ms)"
-msgstr "雙指點擊時長 (毫秒)"
-
-msgid "Two-finger swipe interval (ms)"
-msgstr "雙指滑動間隔 (毫秒)"
-
-msgid "Multi-swipe gestures"
-msgstr "多重滑動手勢"
-
-msgid "Ignore hold on corners"
-msgstr "忽略角落長按"
-
-msgid "Hold-pan rate"
-msgstr "長按平移速率"
-
-msgid "Swipe page turn always active"
-msgstr "滑動翻頁始終啟用"
+msgid "Custom multiswipe gestures"
+msgstr "自訂多重滑動手勢"
 
 msgid "%d gestures defined"
 msgstr "已定義 %d 個手勢"
 
-msgid "Enabled"
-msgstr "已啟用"
-
-msgid "Disabled"
-msgstr "已停用"
-
-msgid "Yes"
-msgstr "是"
-
-msgid "No"
-msgstr "否"
-
-msgid "Always"
-msgstr "始終"
-
-msgid "Reader mode only"
-msgstr "僅閱讀模式"
+msgid "%d custom multiswipes"
+msgstr "%d 個自訂多重滑動"
 
 msgid "(none)"
 msgstr "（無）"
 
 #: main.lua - device and category sync
-msgid "Device: %s"
-msgstr "裝置：%s"
+msgid "Device: "
+msgstr "裝置："
 
 msgid "Device name"
 msgstr "裝置名稱"
@@ -250,9 +208,6 @@ msgstr "例如：Kindle PW5"
 msgid "Device name saved."
 msgstr "裝置名稱已儲存。"
 
-msgid "Sync by category"
-msgstr "按類別同步"
-
 msgid "Sync: %s"
 msgstr "同步：%s"
 
@@ -261,4 +216,3 @@ msgstr "我的備份 (%s)"
 
 msgid "Select source device"
 msgstr "選擇來源裝置"
-

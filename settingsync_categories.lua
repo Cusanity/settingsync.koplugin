@@ -29,14 +29,14 @@ local GESTURE_KEY_LABELS = {
 local function formatGestureMap(val)
     if type(val) ~= "table" then return Diff.prettyValue(val) end
     local count = 0
-    for _k in pairs(val) do count = count + 1 end
+    for _ in pairs(val) do count = count + 1 end
     return string.format(_("%d gestures defined"), count)
 end
 
 local function formatCustomMultiswipes(val)
     if type(val) ~= "table" then return Diff.prettyValue(val) end
     local count = 0
-    for _k in pairs(val) do count = count + 1 end
+    for _ in pairs(val) do count = count + 1 end
     return string.format(_("%d custom multiswipes"), count)
 end
 
