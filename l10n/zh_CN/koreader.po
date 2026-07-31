@@ -157,3 +157,108 @@ msgstr "应用"
 
 msgid "No keys selected. Tap rows to select push/pull actions."
 msgstr "未选择任何项。点击行以选择推送/拉取操作。"
+
+msgid "Local:"
+msgstr "本地："
+
+msgid "Cloud:"
+msgstr "云端："
+
+#: settingsync_categories.lua - category definitions
+msgid "Gestures"
+msgstr "手势"
+
+msgid "Touch gesture mappings and timing settings"
+msgstr "触摸手势映射和计时设置"
+
+msgid "File manager gesture map"
+msgstr "文件管理器手势映射"
+
+msgid "Reader gesture map"
+msgstr "阅读器手势映射"
+
+msgid "Tap interval (ms)"
+msgstr "点击间隔 (毫秒)"
+
+msgid "Double-tap interval (ms)"
+msgstr "双击间隔 (毫秒)"
+
+msgid "Hold interval (ms)"
+msgstr "长按间隔 (毫秒)"
+
+msgid "Swipe interval (ms)"
+msgstr "滑动间隔 (毫秒)"
+
+msgid "Tap interval on keyboard (ms)"
+msgstr "键盘点击间隔 (毫秒)"
+
+msgid "Two-finger tap duration (ms)"
+msgstr "双指点击时长 (毫秒)"
+
+msgid "Two-finger swipe interval (ms)"
+msgstr "双指滑动间隔 (毫秒)"
+
+msgid "Multi-swipe gestures"
+msgstr "多重滑动手势"
+
+msgid "Ignore hold on corners"
+msgstr "忽略角落长按"
+
+msgid "Hold-pan rate"
+msgstr "长按平移速率"
+
+msgid "Swipe page turn always active"
+msgstr "滑动翻页始终启用"
+
+msgid "%d gestures defined"
+msgstr "已定义 %d 个手势"
+
+msgid "Enabled"
+msgstr "已启用"
+
+msgid "Disabled"
+msgstr "已禁用"
+
+msgid "Yes"
+msgstr "是"
+
+msgid "No"
+msgstr "否"
+
+msgid "Always"
+msgstr "始终"
+
+msgid "Reader mode only"
+msgstr "仅阅读模式"
+
+msgid "(none)"
+msgstr "（无）"
+
+#: main.lua - device and category sync
+msgid "Device: %s"
+msgstr "设备：%s"
+
+msgid "Device name"
+msgstr "设备名称"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "e.g. Kindle PW5"
+msgstr "例如：Kindle PW5"
+
+msgid "Device name saved."
+msgstr "设备名称已保存。"
+
+msgid "Sync by category"
+msgstr "按类别同步"
+
+msgid "Sync: %s"
+msgstr "同步：%s"
+
+msgid "My backup (%s)"
+msgstr "我的备份 (%s)"
+
+msgid "Select source device"
+msgstr "选择来源设备"
+

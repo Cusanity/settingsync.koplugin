@@ -27,6 +27,7 @@ local VerticalSpan = require("ui/widget/verticalspan")
 local Screen = Device.screen
 local _ = require("settingsync_gettext")
 
+local Categories = require("settingsync_categories")
 local Diff = require("settingsync_diff")
 
 local DiffViewer = InputContainer:extend{
@@ -34,6 +35,7 @@ local DiffViewer = InputContainer:extend{
     height = nil,
     diff = nil,          -- array of diff entries from Diff.compare()
     source_label = nil,  -- e.g. "settings.reader.lua"
+    category = nil,      -- optional Categories.* table for display labels/formatters
     on_apply = nil,      -- callback(selections) called when user confirms
     selections = nil,    -- { [idx] = "pull"|"push"|nil }
 }
@@ -107,25 +109,24 @@ function DiffViewer:buildUI()
         end
 
         -- Key name and status
+        local key_display = Categories.keyLabel(self.category, entry.key)
         local key_line = HorizontalGroup:new{
             TextWidget:new{
                 text = status_icon .. " ",
                 face = key_font,
             },
             TextWidget:new{
-                text = tostring(entry.key),
+                text = key_display,
                 face = key_font,
                 max_width = inner_width - Size.padding.large * 6,
             },
         }
 
         -- Value previews
-        local local_preview = entry.local_val ~= nil
-            and ("  Local:  " .. Diff.prettyValue(entry.local_val))
-            or  ("  Local:  (none)")
-        local remote_preview = entry.remote_val ~= nil
-            and ("  Cloud:  " .. Diff.prettyValue(entry.remote_val))
-            or  ("  Cloud:  (none)")
+        local local_preview = _('Local:') .. '  '
+            .. Categories.formatValue(self.category, entry.key, entry.local_val)
+        local remote_preview = _('Cloud:') .. '  '
+            .. Categories.formatValue(self.category, entry.key, entry.remote_val)
 
         local local_val_widget = TextBoxWidget:new{
             text = local_preview,

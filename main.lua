@@ -5,9 +5,11 @@ Provides per-key diffing between local and cloud settings with selective
 push/pull so users have full control over which settings are synced.
 --]]
 
+local ButtonDialog = require("ui/widget/buttondialog")
 local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
 local InfoMessage = require("ui/widget/infomessage")
+local InputDialog = require("ui/widget/inputdialog")
 local LuaSettings = require("luasettings")
 local NetworkMgr = require("ui/network/manager")
 local Notification = require("ui/widget/notification")
@@ -19,6 +21,8 @@ local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
 local _ = require("settingsync_gettext")
 
+local Categories = require("settingsync_categories")
+local Devices = require("settingsync_devices")
 local Diff = require("settingsync_diff")
 local DiffViewer = require("settingsync_ui")
 
@@ -162,6 +166,26 @@ function SettingSync:addToMainMenu(menu_items)
                 separator = true,
             },
             {
+                text_func = function()
+                    return string.format(_("Device: %s"),
+                        Devices.currentName(self.settings))
+                end,
+                callback = function()
+                    self:showDeviceNameDialog()
+                end,
+                keep_menu_open = true,
+                separator = true,
+            },
+            {
+                text = _("Sync by category"),
+                enabled_func = function()
+                    return self.settings:readSetting("sync_server") ~= nil
+                end,
+                sub_item_table_func = function()
+                    return self:buildCategoryMenu()
+                end,
+            },
+            {
                 text = _("Diff & sync settings…"),
                 callback = function()
                     self:diffAndSync()
@@ -234,12 +258,263 @@ function SettingSync:buildScopeMenu()
     }
 end
 
+--- Ensure the temp directory exists.
+local function ensureTempDir()
+    if lfs.attributes(TEMP_DIR, "mode") ~= "directory" then
+        lfs.mkdir(TEMP_DIR)
+    end
+end
+
+--- Read a Lua settings file and return its data table.
+-- Returns empty table if file doesn't exist or is unreadable.
+local function readSettingsData(path)
+    if lfs.attributes(path, "mode") ~= "file" then
+        return {}
+    end
+    local ok, data = pcall(dofile, path)
+    if ok and type(data) == "table" then
+        return data
+    end
+    return {}
+end
+
+--- Write a Lua settings table to a file.
+local function writeSettingsData(path, data)
+    local util = require("util")
+    local dir = path:match("(.*/)")
+    if dir and lfs.attributes(dir, "mode") ~= "directory" then
+        os.execute('mkdir -p "' .. dir .. '"')
+    end
+    util.writeToFile(dump(data, nil, true), path, true, true)
+end
+
+--- Build per-category menu items for the "Sync by category" submenu.
+function SettingSync:buildCategoryMenu()
+    local items = {}
+    for _i, category in ipairs(Categories.ALL) do
+        local cat = category  -- capture for closure
+        table.insert(items, {
+            text = string.format(_("Sync: %s"), cat.label),
+            callback = function()
+                self:syncCategory(cat)
+            end,
+        })
+    end
+    return items
+end
+
+--- Show the InputDialog for setting/changing the device name.
+function SettingSync:showDeviceNameDialog()
+    local current = Devices.currentName(self.settings)
+    local dialog
+    dialog = InputDialog:new{
+        title = _("Device name"),
+        input = current ~= Devices.DEFAULT_NAME and current or "",
+        input_hint = _("e.g. Kindle PW5"),
+        buttons = {
+            {
+                {
+                    text = _("Cancel"),
+                    callback = function() UIManager:close(dialog) end,
+                },
+                {
+                    text = _("Save"),
+                    is_enter_default = true,
+                    callback = function()
+                        local name = dialog:getInputText()
+                        name = name and name:match("^%s*(.-)%s*$")  -- trim
+                        if name and name ~= "" then
+                            Devices.setName(self.settings, name)
+                            UIManager:show(Notification:new{
+                                text = _("Device name saved."),
+                                timeout = 2,
+                            })
+                        end
+                        UIManager:close(dialog)
+                    end,
+                },
+            },
+        },
+    }
+    UIManager:show(dialog)
+end
+
+--- Show a dialog letting the user choose which remote device to compare against.
+-- Calls callback(device_name) with the chosen name.
+function SettingSync:showDevicePicker(available_devices, callback)
+    local my_name = Devices.currentName(self.settings)
+    local buttons = {}
+
+    -- Always offer "My backup" as first option.
+    table.insert(buttons, {
+        {
+            text = string.format(_("My backup (%s)"), my_name),
+            callback = function()
+                UIManager:close(self._device_picker)
+                callback(my_name)
+            end,
+        },
+    })
+
+    for _, name in ipairs(available_devices) do
+        if name ~= my_name then
+            local n = name  -- capture
+            table.insert(buttons, {
+                {
+                    text = n,
+                    callback = function()
+                        UIManager:close(self._device_picker)
+                        callback(n)
+                    end,
+                },
+            })
+        end
+    end
+
+    table.insert(buttons, {
+        {
+            text = _("Cancel"),
+            callback = function() UIManager:close(self._device_picker) end,
+        },
+    })
+
+    self._device_picker = ButtonDialog:new{
+        title = _("Select source device"),
+        buttons = buttons,
+    }
+    UIManager:show(self._device_picker)
+end
+
+--- Entry point for syncing a single category.
+-- Downloads device list from cloud, then triggers diff workflow.
+function SettingSync:syncCategory(category)
+    NetworkMgr:runWhenOnline(function()
+        local server = self.settings:readSetting("sync_server")
+        if not server then return end
+
+        local devices = Devices.listFromCloud(server)
+        local my_name = Devices.currentName(self.settings)
+
+        -- If there are other devices available, let the user pick the source.
+        local others = {}
+        for _, n in ipairs(devices) do
+            if n ~= my_name then table.insert(others, n) end
+        end
+
+        if #others > 0 then
+            self:showDevicePicker(devices, function(target)
+                self:_doCategorySync(category, target)
+            end)
+        else
+            -- No other devices: compare against own backup.
+            self:_doCategorySync(category, my_name)
+        end
+    end)
+end
+
+--- Download and diff a category's settings against a remote device.
+function SettingSync:_doCategorySync(category, target_device_name)
+    ensureTempDir()
+    local remote_path = Devices.remotePath(target_device_name, category.remote_name)
+    local temp_path = TEMP_DIR .. "/" .. target_device_name .. "_" .. category.remote_name
+
+    UIManager:show(InfoMessage:new{
+        text = _("Downloading settings from cloud…"),
+        timeout = 1,
+    })
+
+    UIManager:scheduleIn(0.5, function()
+        local ok = self:downloadFromCloud(remote_path, temp_path)
+
+        -- Extract local category data from the category's source file
+        local source_path = category.local_path or (DATA_DIR .. "/settings.reader.lua")
+        local full_local = readSettingsData(source_path)
+        local local_data = Categories.extract(full_local, category)
+        local remote_data = ok and readSettingsData(temp_path) or {}
+        os.remove(temp_path)
+
+        local diff = Diff.compare(local_data, remote_data)
+        local changes = Diff.changesOnly(diff)
+
+        if #changes == 0 then
+            UIManager:show(InfoMessage:new{
+                text = _("All settings are in sync!"),
+                timeout = 3,
+            })
+            return
+        end
+
+        local my_name = Devices.currentName(self.settings)
+        local label = string.format(_("Sync: %s"), category.label)
+            .. " (" .. target_device_name .. " → " .. my_name .. ")"
+            .. " — " .. #changes .. _(" changes)")
+
+        local viewer = DiffViewer:new{
+            diff = diff,
+            source_label = label,
+            category = category,
+            on_apply = function(selections)
+                self:_applyCategorySelections(
+                    category, local_data, remote_data, selections, target_device_name)
+            end,
+        }
+        UIManager:show(viewer)
+    end)
+end
+
+--- Apply category diff selections: push uploads to cloud, pull merges into local file.
+function SettingSync:_applyCategorySelections(
+        category, local_data, remote_data, selections, target_device_name)
+    local has_pulls, has_pushes = false, false
+    for _, sel in ipairs(selections) do
+        if sel.direction == "pull" then has_pulls = true end
+        if sel.direction == "push" then has_pushes = true end
+    end
+
+    if has_pulls then
+        local source_path = category.local_path or (DATA_DIR .. "/settings.reader.lua")
+        local full_local = readSettingsData(source_path)
+        local merged_category = Diff.applySelections(local_data, selections)
+        for _, key in ipairs(category.keys) do
+            if merged_category[key] ~= nil then
+                full_local[key] = merged_category[key]
+            end
+        end
+        writeSettingsData(source_path, full_local)
+        logger.info("SettingSync: pulled", category.id, "category from", target_device_name)
+    end
+
+    if has_pushes then
+        -- Upload the merged category data to  devices/{my_name}/{remote_name}
+        local my_name = Devices.currentName(self.settings)
+        local push_sels = {}
+        for _, sel in ipairs(selections) do
+            if sel.direction == "push" then table.insert(push_sels, sel) end
+        end
+        local merged_remote = Diff.applySelections(remote_data, push_sels)
+        ensureTempDir()
+        local temp_path = TEMP_DIR .. "/" .. my_name .. "_" .. category.remote_name .. ".push"
+        writeSettingsData(temp_path, merged_remote)
+        local remote_path = Devices.remotePath(my_name, category.remote_name)
+        self:ensureRemoteDirs(remote_path)
+        local ok = self:uploadToCloud(temp_path, remote_path)
+        os.remove(temp_path)
+        if ok then
+            logger.info("SettingSync: pushed", category.id, "to cloud as", my_name)
+        else
+            UIManager:show(InfoMessage:new{
+                text = string.format(_("Failed to upload %s to cloud."), category.label),
+                timeout = 3,
+            })
+        end
+    end
+end
+
 --- Show the cloud service configuration dialog (reuses KOReader's SyncService picker).
 function SettingSync:showCloudConfig(touchmenu_instance)
     local server = self.settings:readSetting("sync_server")
     if server then
         -- Already configured: show info + edit/delete
-        local ButtonDialog = require("ui/widget/buttondialog")
         local FFIUtil = require("ffi/util")
         local T = FFIUtil.template
         local type_label = server.type == "dropbox" and " (Dropbox)" or " (WebDAV)"
@@ -303,38 +578,6 @@ function SettingSync:openCloudPicker(touchmenu_instance)
     end
     UIManager:show(sync_settings)
 end
-
---- Ensure the temp directory exists.
-local function ensureTempDir()
-    if lfs.attributes(TEMP_DIR, "mode") ~= "directory" then
-        lfs.mkdir(TEMP_DIR)
-    end
-end
-
---- Read a Lua settings file and return its data table.
--- Returns empty table if file doesn't exist or is unreadable.
-local function readSettingsData(path)
-    if lfs.attributes(path, "mode") ~= "file" then
-        return {}
-    end
-    local ok, data = pcall(dofile, path)
-    if ok and type(data) == "table" then
-        return data
-    end
-    return {}
-end
-
---- Write a Lua settings table to a file.
-local function writeSettingsData(path, data)
-    local util = require("util")
-    -- Ensure parent directory exists
-    local dir = path:match("(.*/)")
-    if dir and lfs.attributes(dir, "mode") ~= "directory" then
-        os.execute('mkdir -p "' .. dir .. '"')
-    end
-    util.writeToFile(dump(data, nil, true), path, true, true)
-end
-
 --- Download a single file from cloud. Returns true on success.
 function SettingSync:downloadFromCloud(remote_name, local_dest)
     local server = self.settings:readSetting("sync_server")
@@ -603,5 +846,7 @@ function SettingSync:_doQuickSync(direction)
         timeout = 3,
     })
 end
+
+require("insert_menu")
 
 return SettingSync
