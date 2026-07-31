@@ -38,112 +38,21 @@ local SettingSync = WidgetContainer:extend{
     is_doc_only = false,
 }
 
---- Syncable source definitions.
--- Each source describes a settings file that can be synced.
-local SOURCES = {
-    {
-        id = "global",
-        label = "settings.reader.lua",
-        description = _("Global KOReader settings"),
-        local_path = DATA_DIR .. "/settings.reader.lua",
-        remote_name = "settings.reader.lua",
-        -- Keys to exclude from sync (device-specific)
-        exclude_keys = {
-            "device_id",
-            "screen_mode",
-            "home_dir",
-            "lastdir",
-            "lastfile",
-            "inbox_dir",
-            "screensaver_dir",
-            "screenshot_dir",
-            "last_migration_date",
-            "quickstart_shown_version",
-            "wifi_was_on",
-            "SSH_port",
-            "SSH_allow_no_password",
-        },
-    },
-}
-
---- Dynamically discover plugin settings files in the settings/ directory.
-local function discoverPluginSettings()
-    local sources = {}
-    if lfs.attributes(SETTINGS_DIR, "mode") ~= "directory" then
-        return sources
-    end
-    for filename in lfs.dir(SETTINGS_DIR) do
-        if filename:match("%.lua$") and filename ~= "settingsync.lua" then
-            table.insert(sources, {
-                id = "plugin:" .. filename,
-                label = "settings/" .. filename,
-                description = string.format(_("Plugin settings: %s"), filename:gsub("%.lua$", "")),
-                local_path = SETTINGS_DIR .. "/" .. filename,
-                remote_name = "settings/" .. filename,
-                exclude_keys = {},
-            })
-        end
-    end
-    table.sort(sources, function(a, b) return a.label < b.label end)
-    return sources
-end
-
---- Discover plugin configuration.lua files.
-local function discoverPluginConfigs()
-    local sources = {}
-    local plugins_dir = DATA_DIR .. "/plugins"
-    if lfs.attributes(plugins_dir, "mode") ~= "directory" then
-        return sources
-    end
-    for dirname in lfs.dir(plugins_dir) do
-        if dirname:match("%.koplugin$") then
-            local config_path = plugins_dir .. "/" .. dirname .. "/configuration.lua"
-            if lfs.attributes(config_path, "mode") == "file" then
-                table.insert(sources, {
-                    id = "config:" .. dirname,
-                    label = "plugins/" .. dirname .. "/configuration.lua",
-                    description = string.format(_("Plugin config: %s"), dirname:gsub("%.koplugin$", "")),
-                    local_path = config_path,
-                    remote_name = "configs/" .. dirname .. "/configuration.lua",
-                    exclude_keys = {},
-                })
-            end
-        end
-    end
-    table.sort(sources, function(a, b) return a.label < b.label end)
-    return sources
-end
-
---- Get all syncable sources based on user's scope settings.
-function SettingSync:getSources()
-    local sources = {}
-    local scope = self.settings:readSetting("sync_scope", {
-        global = true,
-        plugin_settings = true,
-        plugin_configs = true,
-    })
-
-    if scope.global then
-        for _, s in ipairs(SOURCES) do
-            table.insert(sources, s)
-        end
-    end
-    if scope.plugin_settings then
-        for _, s in ipairs(discoverPluginSettings()) do
-            table.insert(sources, s)
-        end
-    end
-    if scope.plugin_configs then
-        for _, s in ipairs(discoverPluginConfigs()) do
-            table.insert(sources, s)
-        end
-    end
-    return sources
-end
-
 function SettingSync:init()
     self.settings = LuaSettings:open(PLUGIN_SETTINGS_PATH)
     self.ui.menu:registerToMainMenu(self)
+end
+
+--- Return the categories the user has enabled for sync (defaults to all on).
+function SettingSync:getEnabledCategories()
+    local scope = self.settings:readSetting("sync_categories", {})
+    local enabled = {}
+    for _, cat in ipairs(Categories.ALL) do
+        if scope[cat.id] ~= false then
+            table.insert(enabled, cat)
+        end
+    end
+    return enabled
 end
 
 function SettingSync:addToMainMenu(menu_items)
@@ -154,108 +63,144 @@ function SettingSync:addToMainMenu(menu_items)
     }
 end
 
---- Build the top-level sub-menu items dynamically so that category entries
---- are injected inline (no extra submenu depth).
+--- Build the top-level menu, laid out like a typical consumer sync screen:
+--- one primary "Sync now" action, a status line, account/device setup,
+--- a "What to sync" chooser, and an "Advanced" drawer for power features.
 function SettingSync:buildMainMenu()
     local server_ok = function()
         return self.settings:readSetting("sync_server") ~= nil
     end
 
-    local items = {
+    return {
+        {
+            text = _("Sync now"),
+            enabled_func = server_ok,
+            keep_menu_open = true,
+            callback = function() self:syncNow() end,
+            hold_callback = function()
+                UIManager:show(InfoMessage:new{
+                    text = _("Compares this device with the cloud and merges the differences"
+                        .. " automatically. If the same setting was changed in both places,"
+                        .. " you decide which version to keep."),
+                })
+            end,
+        },
+        {
+            text_func = function() return self:statusText() end,
+            enabled_func = function() return false end,
+            separator = true,
+        },
         {
             text_func = function()
                 local sv = self.settings:readSetting("sync_server")
-                return sv and (_("Cloud: ") .. sv.name) or _("Configure cloud service…")
+                return sv and (_("Cloud account: ") .. sv.name) or _("Set up cloud account…")
             end,
+            keep_menu_open = true,
             callback = function(touchmenu_instance)
                 self:showCloudConfig(touchmenu_instance)
             end,
-            keep_menu_open = true,
         },
         {
             text_func = function()
-                return _("Device: ") .. Devices.currentName(self.settings)
-            end,
-            callback = function()
-                self:showDeviceNameDialog()
+                return _("This device: ") .. Devices.currentName(self.settings)
             end,
             keep_menu_open = true,
+            callback = function() self:showDeviceNameDialog() end,
             separator = true,
         },
+        {
+            text = _("What to sync"),
+            sub_item_table_func = function() return self:buildWhatToSyncMenu() end,
+            separator = true,
+        },
+        {
+            text = _("Advanced"),
+            sub_item_table_func = function() return self:buildAdvancedMenu() end,
+        },
     }
+end
 
-    for _i, cat in ipairs(Categories.ALL) do
+--- Human-readable sync status shown under the "Sync now" button.
+function SettingSync:statusText()
+    if not self.settings:readSetting("sync_server") then
+        return _("Not set up yet")
+    end
+    local ts = self.settings:readSetting("last_sync")
+    if not ts then
+        return _("Not synced yet")
+    end
+    return _("Last synced: ") .. os.date("%Y-%m-%d %H:%M", ts)
+end
+
+--- "What to sync": one checkbox per defined category so users can toggle individual groups.
+function SettingSync:buildWhatToSyncMenu()
+    local scope = self.settings:readSetting("sync_categories", {})
+    local function toggle(id)
+        scope[id] = (scope[id] == false) and nil or false
+        self.settings:saveSetting("sync_categories", scope)
+        self.settings:flush()
+    end
+    local items = {}
+    for _, cat in ipairs(Categories.ALL) do
         local c = cat
         table.insert(items, {
-            text = string.format(_("Sync: %s"), c.label),
-            callback = function() self:syncCategory(c) end,
-            enabled_func = server_ok,
+            text = c.label,
+            help_text = c.description,
+            checked_func = function() return scope[c.id] ~= false end,
+            callback = function() toggle(c.id) end,
         })
     end
-
-    table.insert(items, {
-        text = _("Compare & sync all settings…"),
-        callback = function() self:diffAndSync() end,
-        enabled_func = server_ok,
-        separator = true,
-    })
-
-    table.insert(items, {
-        text = _("Push all to cloud"),
-        callback = function() self:quickSync("push") end,
-        enabled_func = server_ok,
-    })
-
-    table.insert(items, {
-        text = _("Pull all from cloud"),
-        callback = function() self:quickSync("pull") end,
-        enabled_func = server_ok,
-        separator = true,
-    })
-
-    table.insert(items, {
-        text = _("Sync scope"),
-        sub_item_table = self:buildScopeMenu(),
-    })
-
     return items
 end
 
-function SettingSync:buildScopeMenu()
-    local scope = self.settings:readSetting("sync_scope", {
-        global = true,
-        plugin_settings = true,
-        plugin_configs = true,
-    })
+--- "Advanced": power-user features kept out of the main flow.
+function SettingSync:buildAdvancedMenu()
+    local server_ok = function()
+        return self.settings:readSetting("sync_server") ~= nil
+    end
     return {
         {
-            text = _("Global settings (settings.reader.lua)"),
-            checked_func = function() return scope.global end,
-            callback = function()
-                scope.global = not scope.global
-                self.settings:saveSetting("sync_scope", scope)
-                self.settings:flush()
-            end,
+            text = _("Review and choose each change…"),
+            help_text = _("See every differing setting and pick push or pull per item."),
+            enabled_func = server_ok,
+            callback = function() self:diffAndSync() end,
+            separator = true,
         },
         {
-            text = _("Plugin settings (settings/*.lua)"),
-            checked_func = function() return scope.plugin_settings end,
-            callback = function()
-                scope.plugin_settings = not scope.plugin_settings
-                self.settings:saveSetting("sync_scope", scope)
-                self.settings:flush()
-            end,
+            text = _("Restore from another device"),
+            help_text = _("Copy a group of settings from another device's backup."),
+            enabled_func = server_ok,
+            sub_item_table_func = function() return self:buildRestoreMenu() end,
+            separator = true,
         },
         {
-            text = _("Plugin configs (configuration.lua)"),
-            checked_func = function() return scope.plugin_configs end,
-            callback = function()
-                scope.plugin_configs = not scope.plugin_configs
-                self.settings:saveSetting("sync_scope", scope)
-                self.settings:flush()
-            end,
+            text = _("Force upload — overwrite cloud"),
+            enabled_func = server_ok,
+            callback = function() self:quickSync("push") end,
+        },
+        {
+            text = _("Force download — overwrite this device"),
+            enabled_func = server_ok,
+            callback = function() self:quickSync("pull") end,
         },
     }
+end
+
+--- Per-category restore entries (device-specific groups such as gestures).
+function SettingSync:buildRestoreMenu()
+    local items = {}
+    for _, cat in ipairs(Categories.ALL) do
+        local c = cat
+        table.insert(items, {
+            text = c.label,
+            help_text = c.description,
+            callback = function() self:syncCategory(c) end,
+        })
+    end
+    if #items == 0 then
+        items = { { text = _("Nothing available to restore"), enabled_func = function() return false end } }
+    end
+    return items
 end
 
 --- Ensure the temp directory exists.
@@ -286,6 +231,26 @@ local function writeSettingsData(path, data)
         lfs.mkdir(dir)
     end
     util.writeToFile(dump(data, nil, true), path, true, true)
+end
+
+--- Merge pulled category data back into its source file.
+-- For partial-key categories this preserves all unrelated keys in the file.
+-- Excluded keys (device-specific) are always kept from local.
+local function mergeCategoryIntoFile(category, merged_data)
+    local full = readSettingsData(category.local_path)
+    local excluded = {}
+    if category.exclude_keys then
+        for _, ek in ipairs(category.exclude_keys) do excluded[ek] = true end
+    end
+    for key in pairs(full) do
+        if Categories.owns(category, key) and not excluded[key] then
+            full[key] = nil
+        end
+    end
+    for key, val in pairs(merged_data) do
+        full[key] = val
+    end
+    writeSettingsData(category.local_path, full)
 end
 
 
@@ -461,10 +426,15 @@ function SettingSync:_applyCategorySelections(
         local source_path = category.local_path or (DATA_DIR .. "/settings.reader.lua")
         local full_local = readSettingsData(source_path)
         local merged_category = Diff.applySelections(local_data, selections)
-        for _, key in ipairs(category.keys) do
-            if merged_category[key] ~= nil then
-                full_local[key] = merged_category[key]
+        -- Replace this category's portion of the file: drop its old keys, then
+        -- write back the merged set (covers keys/key_prefix/all_keys modes).
+        for key in pairs(full_local) do
+            if Categories.owns(category, key) then
+                full_local[key] = nil
             end
+        end
+        for key, val in pairs(merged_category) do
+            full_local[key] = val
         end
         writeSettingsData(source_path, full_local)
         logger.info("SettingSync: pulled", category.id, "category from", target_device_name)
@@ -623,10 +593,10 @@ end
 
 function SettingSync:_doDiffAndSync()
     ensureTempDir()
-    local sources = self:getSources()
-    if #sources == 0 then
+    local categories = self:getEnabledCategories()
+    if #categories == 0 then
         UIManager:show(InfoMessage:new{
-            text = _("No settings sources enabled. Check Sync scope settings."),
+            text = _("No categories enabled. Open \"What to sync\" to choose."),
             timeout = 3,
         })
         return
@@ -641,17 +611,19 @@ function SettingSync:_doDiffAndSync()
     -- We schedule the actual work to let the InfoMessage render
     UIManager:scheduleIn(0.5, function()
         local all_diffs = {}
+        local my_name = Devices.currentName(self.settings)
 
-        for _, source in ipairs(sources) do
-            local temp_path = TEMP_DIR .. "/" .. source.remote_name:gsub("/", "_")
-            local ok = self:downloadFromCloud(source.remote_name, temp_path)
+        for _, cat in ipairs(categories) do
+            local remote_path = Devices.remotePath(my_name, cat.remote_name)
+            local temp_path = TEMP_DIR .. "/" .. cat.remote_name:gsub("/", "_")
+            local ok = self:downloadFromCloud(remote_path, temp_path)
 
-            local local_data = readSettingsData(source.local_path)
+            local full_local = readSettingsData(cat.local_path)
+            local local_data = Categories.extract(full_local, cat)
             local remote_data = ok and readSettingsData(temp_path) or {}
 
-            -- Remove excluded keys
-            if source.exclude_keys then
-                for _, ek in ipairs(source.exclude_keys) do
+            if cat.exclude_keys then
+                for _, ek in ipairs(cat.exclude_keys) do
                     local_data[ek] = nil
                     remote_data[ek] = nil
                 end
@@ -662,7 +634,7 @@ function SettingSync:_doDiffAndSync()
 
             if #changes > 0 then
                 table.insert(all_diffs, {
-                    source = source,
+                    source = cat,
                     diff = diff,
                     changes = changes,
                     local_data = local_data,
@@ -670,7 +642,6 @@ function SettingSync:_doDiffAndSync()
                 })
             end
 
-            -- Clean up temp file
             os.remove(temp_path)
         end
 
@@ -723,16 +694,8 @@ function SettingSync:applyDiffSelections(item, selections)
     if has_pulls then
         -- Apply pull: merge remote values into local
         local merged = Diff.applySelections(item.local_data, selections)
-        -- Re-add excluded keys from original file
-        local original = readSettingsData(item.source.local_path)
-        if item.source.exclude_keys then
-            for _, ek in ipairs(item.source.exclude_keys) do
-                if original[ek] ~= nil then
-                    merged[ek] = original[ek]
-                end
-            end
-        end
-        writeSettingsData(item.source.local_path, merged)
+        -- Category-aware merge-back: preserves unrelated keys and excluded keys.
+        mergeCategoryIntoFile(item.source, merged)
         logger.info("SettingSync: pulled changes into", item.source.local_path)
     end
 
@@ -749,8 +712,10 @@ function SettingSync:applyDiffSelections(item, selections)
         ensureTempDir()
         local temp_path = TEMP_DIR .. "/" .. item.source.remote_name:gsub("/", "_") .. ".push"
         writeSettingsData(temp_path, merged_remote)
-        self:ensureRemoteDirs(item.source.remote_name)
-        local ok = self:uploadToCloud(temp_path, item.source.remote_name)
+        local my_name = Devices.currentName(self.settings)
+        local remote_path = Devices.remotePath(my_name, item.source.remote_name)
+        self:ensureRemoteDirs(remote_path)
+        local ok = self:uploadToCloud(temp_path, remote_path)
         os.remove(temp_path)
         if ok then
             logger.info("SettingSync: pushed changes to cloud for", item.source.remote_name)
@@ -783,35 +748,39 @@ end
 
 function SettingSync:_doQuickSync(direction)
     ensureTempDir()
-    local sources = self:getSources()
+    local categories = self:getEnabledCategories()
+    local my_name = Devices.currentName(self.settings)
     local success_count = 0
     local fail_count = 0
 
-    for _, source in ipairs(sources) do
+    for _, cat in ipairs(categories) do
+        local remote_path = Devices.remotePath(my_name, cat.remote_name)
         if direction == "push" then
-            if lfs.attributes(source.local_path, "mode") == "file" then
-                self:ensureRemoteDirs(source.remote_name)
-                if self:uploadToCloud(source.local_path, source.remote_name) then
+            local full_local = readSettingsData(cat.local_path)
+            local cat_data = Categories.extract(full_local, cat)
+            if cat.exclude_keys then
+                for _, ek in ipairs(cat.exclude_keys) do cat_data[ek] = nil end
+            end
+            if next(cat_data) then
+                local temp_path = TEMP_DIR .. "/" .. cat.remote_name:gsub("/", "_") .. ".push"
+                writeSettingsData(temp_path, cat_data)
+                self:ensureRemoteDirs(remote_path)
+                if self:uploadToCloud(temp_path, remote_path) then
                     success_count = success_count + 1
                 else
                     fail_count = fail_count + 1
                 end
+                os.remove(temp_path)
             end
         elseif direction == "pull" then
-            local temp_path = TEMP_DIR .. "/" .. source.remote_name:gsub("/", "_")
-            if self:downloadFromCloud(source.remote_name, temp_path) then
+            local temp_path = TEMP_DIR .. "/" .. cat.remote_name:gsub("/", "_")
+            if self:downloadFromCloud(remote_path, temp_path) then
                 local remote_data = readSettingsData(temp_path)
                 if next(remote_data) then
-                    -- Preserve excluded keys from local
-                    if source.exclude_keys then
-                        local original = readSettingsData(source.local_path)
-                        for _, ek in ipairs(source.exclude_keys) do
-                            if original[ek] ~= nil then
-                                remote_data[ek] = original[ek]
-                            end
-                        end
+                    if cat.exclude_keys then
+                        for _, ek in ipairs(cat.exclude_keys) do remote_data[ek] = nil end
                     end
-                    writeSettingsData(source.local_path, remote_data)
+                    mergeCategoryIntoFile(cat, remote_data)
                     success_count = success_count + 1
                 end
             else
@@ -831,6 +800,184 @@ function SettingSync:_doQuickSync(direction)
         text = text,
         timeout = 3,
     })
+end
+
+--- Smart one-tap sync: merges one-sided changes automatically and only asks
+--- the user when the same setting was changed on both the device and the cloud.
+function SettingSync:syncNow()
+    if not self.settings:readSetting("sync_server") then
+        self:showCloudConfig()
+        return
+    end
+    NetworkMgr:runWhenOnline(function()
+        self:_doSyncNow()
+    end)
+end
+
+function SettingSync:_doSyncNow()
+    ensureTempDir()
+    local categories = self:getEnabledCategories()
+    if #categories == 0 then
+        UIManager:show(InfoMessage:new{
+            text = _("Nothing is selected to sync. Open \"What to sync\" to choose."),
+            timeout = 3,
+        })
+        return
+    end
+
+    UIManager:show(InfoMessage:new{ text = _("Syncing…"), timeout = 1 })
+    UIManager:scheduleIn(0.5, function()
+        local items = {}
+        local conflicts = {}
+        local my_name = Devices.currentName(self.settings)
+
+        for _, cat in ipairs(categories) do
+            local remote_path = Devices.remotePath(my_name, cat.remote_name)
+            local temp_path = TEMP_DIR .. "/" .. cat.remote_name:gsub("/", "_")
+            local ok = self:downloadFromCloud(remote_path, temp_path)
+            local full_local = readSettingsData(cat.local_path)
+            local local_data = Categories.extract(full_local, cat)
+            local remote_data = ok and readSettingsData(temp_path) or {}
+            os.remove(temp_path)
+
+            if cat.exclude_keys then
+                for _, ek in ipairs(cat.exclude_keys) do
+                    local_data[ek] = nil
+                    remote_data[ek] = nil
+                end
+            end
+
+            local item = {
+                source = cat,
+                local_data = local_data,
+                remote_data = remote_data,
+                selections = {},
+            }
+            for _, entry in ipairs(Diff.compare(local_data, remote_data)) do
+                if entry.status == Diff.ADDED then
+                    -- local only → upload
+                    table.insert(item.selections, { entry = entry, direction = "push" })
+                elseif entry.status == Diff.REMOVED then
+                    -- cloud only → download
+                    table.insert(item.selections, { entry = entry, direction = "pull" })
+                elseif entry.status == Diff.MODIFIED then
+                    table.insert(conflicts, { item = item, entry = entry })
+                end
+            end
+            table.insert(items, item)
+        end
+
+        if #conflicts == 0 then
+            self:_finishSyncNow(items)
+        else
+            self:_resolveConflicts(items, conflicts)
+        end
+    end)
+end
+
+--- Apply every collected selection, stamp the sync time, and report a summary.
+function SettingSync:_finishSyncNow(items)
+    local n_push, n_pull = 0, 0
+    for _, item in ipairs(items) do
+        for _, sel in ipairs(item.selections) do
+            if sel.direction == "push" then n_push = n_push + 1
+            elseif sel.direction == "pull" then n_pull = n_pull + 1 end
+        end
+        if #item.selections > 0 then
+            self:applyDiffSelections(item, item.selections)
+        end
+    end
+
+    self.settings:saveSetting("last_sync", os.time())
+    self.settings:flush()
+
+    local text
+    if n_push == 0 and n_pull == 0 then
+        text = _("Everything is already up to date.")
+    else
+        text = string.format(_("Sync complete: %d uploaded, %d downloaded."), n_push, n_pull)
+    end
+    UIManager:show(Notification:new{ text = text, timeout = 3 })
+end
+
+--- Ask the user how to resolve settings changed on both sides.
+function SettingSync:_resolveConflicts(items, conflicts)
+    local dialog
+    dialog = ButtonDialog:new{
+        title = string.format(
+            _("%d setting(s) were changed on both this device and the cloud.\n\nWhich version should be kept?"),
+            #conflicts),
+        buttons = {
+            {{
+                text = _("Keep this device"),
+                callback = function()
+                    UIManager:close(dialog)
+                    for _, c in ipairs(conflicts) do
+                        table.insert(c.item.selections, { entry = c.entry, direction = "push" })
+                    end
+                    self:_finishSyncNow(items)
+                end,
+            }},
+            {{
+                text = _("Keep cloud"),
+                callback = function()
+                    UIManager:close(dialog)
+                    for _, c in ipairs(conflicts) do
+                        table.insert(c.item.selections, { entry = c.entry, direction = "pull" })
+                    end
+                    self:_finishSyncNow(items)
+                end,
+            }},
+            {{
+                text = _("Choose for each…"),
+                callback = function()
+                    UIManager:close(dialog)
+                    self:_reviewConflicts(items, conflicts)
+                end,
+            }},
+            {{
+                text = _("Cancel"),
+                callback = function() UIManager:close(dialog) end,
+            }},
+        },
+    }
+    UIManager:show(dialog)
+end
+
+--- Apply the automatic (one-sided) changes, then open the diff viewer limited
+--- to the conflicting keys so the user can pick a direction per item.
+function SettingSync:_reviewConflicts(items, conflicts)
+    for _, item in ipairs(items) do
+        if #item.selections > 0 then
+            self:applyDiffSelections(item, item.selections)
+        end
+    end
+
+    local per_item = {}
+    local order = {}
+    for _, c in ipairs(conflicts) do
+        if not per_item[c.item] then
+            per_item[c.item] = {}
+            table.insert(order, c.item)
+        end
+        table.insert(per_item[c.item], c.entry)
+    end
+
+    local all_diffs = {}
+    for _, item in ipairs(order) do
+        local entries = per_item[item]
+        table.insert(all_diffs, {
+            source = item.source,
+            diff = entries,
+            changes = entries,
+            local_data = item.local_data,
+            remote_data = item.remote_data,
+        })
+    end
+
+    self.settings:saveSetting("last_sync", os.time())
+    self.settings:flush()
+    self:showDiffChain(all_diffs, 1)
 end
 
 require("insert_menu")

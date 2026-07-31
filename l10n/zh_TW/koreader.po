@@ -34,32 +34,76 @@ msgid "Plugin config: %s"
 msgstr "外掛組態：%s"
 
 #: main.lua - main menu
-msgid "Cloud: "
-msgstr "雲端："
+msgid "Sync now"
+msgstr "立即同步"
 
-msgid "Configure cloud service…"
-msgstr "設定雲端服務…"
+msgid "Compares this device with the cloud and merges the differences automatically. If the same setting was changed in both places, you decide which version to keep."
+msgstr "將本裝置與雲端進行比較並自動合併差異。如果同一項設定在兩處都被修改，則由你決定保留哪個版本。"
 
-msgid "Compare & sync all settings…"
-msgstr "比對並同步全部設定…"
+msgid "Cloud account: "
+msgstr "雲端帳戶："
 
-msgid "Push all to cloud"
-msgstr "推送全部至雲端"
+msgid "Set up cloud account…"
+msgstr "設定雲端帳戶…"
 
-msgid "Pull all from cloud"
-msgstr "從雲端拉取全部"
+msgid "This device: "
+msgstr "本裝置："
 
-msgid "Sync scope"
-msgstr "同步範圍"
+msgid "What to sync"
+msgstr "同步內容"
 
-msgid "Global settings (settings.reader.lua)"
-msgstr "全域設定 (settings.reader.lua)"
+msgid "Advanced"
+msgstr "進階"
 
-msgid "Plugin settings (settings/*.lua)"
-msgstr "外掛設定 (settings/*.lua)"
+msgid "Not set up yet"
+msgstr "尚未設定"
 
-msgid "Plugin configs (configuration.lua)"
-msgstr "外掛組態 (configuration.lua)"
+msgid "Not synced yet"
+msgstr "尚未同步"
+
+msgid "Last synced: "
+msgstr "上次同步："
+
+#: main.lua - what to sync
+msgid "KOReader settings"
+msgstr "KOReader 設定"
+
+msgid "Reading, display and behaviour settings (settings.reader.lua)."
+msgstr "閱讀、顯示和行為設定 (settings.reader.lua)。"
+
+msgid "Plugin settings"
+msgstr "外掛設定"
+
+msgid "Settings saved by other installed plugins."
+msgstr "其他已安裝外掛儲存的設定。"
+
+msgid "Plugin configuration files"
+msgstr "外掛組態檔案"
+
+msgid "configuration.lua files bundled with plugins."
+msgstr "外掛附帶的 configuration.lua 檔案。"
+
+#: main.lua - advanced
+msgid "Review and choose each change…"
+msgstr "逐項檢視並選擇…"
+
+msgid "See every differing setting and pick push or pull per item."
+msgstr "檢視每一項差異設定，並逐項選擇推送或拉取。"
+
+msgid "Restore from another device"
+msgstr "從其他裝置還原"
+
+msgid "Copy a group of settings from another device's backup."
+msgstr "從其他裝置的備份複製一組設定。"
+
+msgid "Force upload — overwrite cloud"
+msgstr "強制上傳 — 覆蓋雲端"
+
+msgid "Force download — overwrite this device"
+msgstr "強制下載 — 覆蓋本裝置"
+
+msgid "Nothing available to restore"
+msgstr "沒有可還原的內容"
 
 #: main.lua - cloud config dialog
 msgid "Cloud service:\n%1\n\nSync folder:\n%2"
@@ -118,6 +162,31 @@ msgstr "拉取"
 msgid "Synced %d settings file(s) successfully."
 msgstr "已成功同步 %d 個設定檔案。"
 
+#: main.lua - sync now
+msgid "Nothing is selected to sync. Open \"What to sync\" to choose."
+msgstr "未選擇任何要同步的內容。請開啟「同步內容」進行選擇。"
+
+msgid "Syncing…"
+msgstr "正在同步…"
+
+msgid "Everything is already up to date."
+msgstr "所有內容均已是最新。"
+
+msgid "Sync complete: %d uploaded, %d downloaded."
+msgstr "同步完成：上傳 %d 項，下載 %d 項。"
+
+msgid "%d setting(s) were changed on both this device and the cloud.\n\nWhich version should be kept?"
+msgstr "有 %d 項設定在本裝置和雲端都被修改。\n\n應保留哪個版本？"
+
+msgid "Keep this device"
+msgstr "保留本裝置"
+
+msgid "Keep cloud"
+msgstr "保留雲端"
+
+msgid "Choose for each…"
+msgstr "逐項選擇…"
+
 msgid "Synced %d file(s), %d failed."
 msgstr "已同步 %d 個檔案，%d 個失敗。"
 
@@ -174,6 +243,48 @@ msgstr "手勢"
 msgid "Touch gesture action mappings"
 msgstr "觸控手勢動作對映"
 
+msgid "Cloud storage & WebDAV"
+msgstr "雲端儲存與 WebDAV"
+
+msgid "Cloud servers, WebDAV list and default upload/download folders."
+msgstr "雲端伺服器、WebDAV 清單以及預設的上傳/下載資料夾。"
+
+msgid "Highlight export"
+msgstr "匯出標註"
+
+msgid "Export formats and destinations."
+msgstr "匯出格式與目標位置。"
+
+msgid "Reading statistics"
+msgstr "閱讀統計"
+
+msgid "Reading statistics options (not the history database)."
+msgstr "閱讀統計選項（不含歷史資料庫）。"
+
+msgid "Progress sync"
+msgstr "進度同步"
+
+msgid "Progress sync server, account and options."
+msgstr "進度同步伺服器、帳戶與選項。"
+
+msgid "X-Ray"
+msgstr "X-Ray"
+
+msgid "All X-Ray options and its sync server settings."
+msgstr "全部 X-Ray 選項及其同步伺服器設定。"
+
+msgid "Highlight sync"
+msgstr "標註同步"
+
+msgid "Highlight sync server and options."
+msgstr "標註同步伺服器與選項。"
+
+msgid "AI assistant"
+msgstr "AI 助手"
+
+msgid "AI assistant preferences, provider and model selection."
+msgstr "AI 助手偏好設定、服務商與模型選擇。"
+
 msgid "File manager gesture map"
 msgstr "檔案管理器手勢對映"
 
@@ -193,9 +304,6 @@ msgid "(none)"
 msgstr "（無）"
 
 #: main.lua - device and category sync
-msgid "Device: "
-msgstr "裝置："
-
 msgid "Device name"
 msgstr "裝置名稱"
 
