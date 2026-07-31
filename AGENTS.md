@@ -239,6 +239,9 @@ All user-visible strings **must** go through `settingsync_gettext.lua` (aliased 
 - When you add a new string, add it to **both** `l10n/zh_CN/koreader.po` and
   `l10n/zh_TW/koreader.po`.
 - Never hardcode a translated string directly in Lua files.
+- **Never concatenate a non-ASCII string literal with `_()`.**  Patterns like
+  `"\u2713 " .. _("key")` produce partially-translated strings that `check_i18n.py` will flag.
+  Put the whole visible string into a dedicated translation key instead.
 
 ## Build / test / lint
 
