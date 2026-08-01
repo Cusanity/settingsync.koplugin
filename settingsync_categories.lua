@@ -70,28 +70,134 @@ Categories.GESTURES = {
 --   key_prefix = "xray_"       -- every key starting with this prefix
 --   all_keys   = true          -- the entire settings file
 
-Categories.GLOBAL = {
-    id                 = "global",
-    label              = _("KOReader core settings"),
-    description        = _("Reading, display and behaviour settings (settings.reader.lua)."),
+Categories.SCREEN = {
+    id                 = "screen",
+    label              = _("Screen"),
+    description        = _("Screen and display settings."),
+    is_device_specific = true,
+    local_path         = READER_SETTINGS,
+    remote_name        = "screen.lua",
+    keys               = {
+        "night_mode",
+        "screen_dpi", "custom_screen_dpi",
+        "fm_rotation_mode",
+        "color_rendering",
+        "low_pan_rate",
+        "no_refresh_on_second_chapter_page",
+        "refresh_on_chapter_boundaries",
+        "refresh_on_pages_with_images",
+        "notification_sources_to_show_mask",
+        "fullscreen",
+        "screensaver_type", "screensaver_delay",
+        "screensaver_extra_flash_count", "screensaver_extra_flash_delay",
+        "screensaver_message_alpha", "screensaver_message_vertical_position",
+        "screensaver_stretch_limit_percentage",
+        "autowarmth_night_time", "autowarmth_day_time",
+        "autodim_after_seconds", "autodim_pm",
+        "coverimage_enabled", "coverimage_background", "coverimage_fallback",
+        "coverimage_include_title", "coverimage_include_authors",
+    },
+}
+
+Categories.NETWORK = {
+    id                 = "network",
+    label              = _("Network"),
+    description        = _("Network and Wi-Fi settings."),
+    is_device_specific = true,
+    local_path         = READER_SETTINGS,
+    remote_name        = "network.lua",
+    keys               = {
+        "http_proxy", "http_proxy_enabled",
+        "wifi_enable_action", "wifi_disable_action",
+        "network_powersave",
+        "auto_standby_timeout_seconds",
+    },
+}
+
+Categories.NAVIGATION = {
+    id                 = "navigation",
+    label              = _("Navigation"),
+    description        = _("Navigation, button and gesture settings."),
+    is_device_specific = true,
+    local_path         = READER_SETTINGS,
+    remote_name        = "navigation.lua",
+    keys               = {
+        "back_to_exit", "back_in_filemanager", "back_in_reader",
+        "backspace_as_back",
+        "opening_page_location_stack",
+        "skim_dialog_position",
+        "android_ignore_back_button", "android_ignore_volume_keys",
+        "input_invert_page_turn_keys",
+        "input_invert_left_page_turn_keys",
+        "input_invert_right_page_turn_keys",
+        "input_no_key_repeat", "input_lock_gsensor", "input_ignore_gsensor",
+        "activate_menu",
+        "ignore_hold_corners",
+        "disable_double_tap",
+        "page_turns_tap_zones",
+        "page_turns_tap_zone_backward_size_ratio",
+        "page_turns_tap_zone_forward_size_ratio",
+        "pageturn_power",
+        "scroll_method", "inertial_scroll", "scroll_activation_delay",
+        "haptic_feedback_override",
+    },
+}
+
+Categories.DOCUMENT = {
+    id                 = "document",
+    label              = _("Document"),
+    description        = _("Document handling and metadata settings."),
     is_device_specific = false,
     local_path         = READER_SETTINGS,
-    remote_name        = "settings.reader.lua",
-    all_keys           = true,
-    exclude_keys       = {
-        "device_id",
-        "screen_mode",
-        "home_dir",
-        "lastdir",
-        "lastfile",
-        "inbox_dir",
-        "screensaver_dir",
-        "screenshot_dir",
-        "last_migration_date",
-        "quickstart_shown_version",
-        "wifi_was_on",
-        "SSH_port",
-        "SSH_allow_no_password",
+    remote_name        = "document.lua",
+    keys               = {
+        "document_metadata_folder", "document_metadata_arc_folder",
+        "document_metadata_arc_on_closing",
+        "auto_save_settings_interval_minutes",
+        "end_document_action", "end_document_auto_mark",
+        "collate",
+        "partial_rerendering",
+    },
+}
+
+Categories.LANGUAGE = {
+    id                 = "language",
+    label              = _("Language"),
+    description        = _("Language, units and time format."),
+    is_device_specific = false,
+    local_path         = READER_SETTINGS,
+    remote_name        = "language.lua",
+    keys               = {
+        "language",
+        "dimension_units", "dimension_units_append_px",
+        "duration_format",
+        "twelve_hour_clock",
+    },
+}
+
+Categories.DEVICE = {
+    id                 = "device",
+    label              = _("Device"),
+    description        = _("Device-specific hardware settings."),
+    is_device_specific = true,
+    local_path         = READER_SETTINGS,
+    remote_name        = "device.lua",
+    keys               = {
+        "keyboard_layout_default", "keyboard_layouts",
+        "keyboard_key_bold", "keyboard_key_border",
+        "keyboard_key_compact", "keyboard_key_font_size",
+        "font_ui_fallbacks",
+        "file_ext_assoc",
+        "device_status_battery_interval_minutes",
+        "device_status_battery_threshold",
+        "device_status_battery_threshold_high",
+        "device_status_memory_interval_minutes",
+        "device_status_memory_threshold",
+        "enable_charging_led",
+        "ignore_power_sleepcover", "ignore_open_sleepcover",
+        "autostandby_timeout", "autosuspend_timeout", "autoshutdown_timeout",
+        "pageturn_power",
+        "screenshot_folder",
     },
 }
 
@@ -165,9 +271,37 @@ Categories.ASSISTANT = {
     all_keys           = true,
 }
 
+Categories.STATUS_BAR = {
+    id                 = "statusbar",
+    label              = _("Status bar"),
+    description        = _("Status bar layout, enabled items and saved presets."),
+    is_device_specific = true,
+    local_path         = READER_SETTINGS,
+    remote_name        = "statusbar.lua",
+    keys               = {
+        "footer",
+        "reader_footer_mode",
+        "reader_footer_custom_text",
+        "reader_footer_custom_text_repetitions",
+        "footer_presets",
+    },
+    key_labels         = {
+        footer                              = _("Status bar settings"),
+        reader_footer_mode                  = _("Active mode"),
+        reader_footer_custom_text           = _("Custom text"),
+        reader_footer_custom_text_repetitions = _("Custom text repetitions"),
+        footer_presets                      = _("Saved presets"),
+    },
+}
+
 --- All registered categories in display order.
 Categories.ALL = {
-    Categories.GLOBAL,
+    Categories.SCREEN,
+    Categories.NETWORK,
+    Categories.NAVIGATION,
+    Categories.DOCUMENT,
+    Categories.LANGUAGE,
+    Categories.DEVICE,
     Categories.GESTURES,
     Categories.CLOUD_STORAGE,
     Categories.EXPORTER,
@@ -176,6 +310,7 @@ Categories.ALL = {
     Categories.XRAY,
     Categories.HIGHLIGHT_SYNC,
     Categories.ASSISTANT,
+    Categories.STATUS_BAR,
 }
 
 --- Return true if a settings key belongs to the given category.

@@ -29,6 +29,7 @@ local DiffViewer = require("settingsync_ui")
 local SETTINGS_DIR = DataStorage:getSettingsDir()
 local DATA_DIR = DataStorage:getDataDir()
 local PLUGIN_SETTINGS_PATH = SETTINGS_DIR .. "/settingsync.lua"
+local READER_SETTINGS = DATA_DIR .. "/settings.reader.lua"
 
 -- Temp directory for downloaded cloud files during diff
 local TEMP_DIR = DATA_DIR .. "/cache/settingsync"
@@ -136,11 +137,42 @@ end
 function SettingSync:buildWhatToSyncMenu()
     local scope = self.settings:readSetting("sync_categories", {})
     local function toggle(id)
-        scope[id] = (scope[id] == false) and nil or false
+        if scope[id] == false then
+            scope[id] = nil
+        else
+            scope[id] = false
+        end
         self.settings:saveSetting("sync_categories", scope)
         self.settings:flush()
     end
-    local items = {}
+    local function allEnabled()
+        for _, cat in ipairs(Categories.ALL) do
+            if scope[cat.id] == false then return false end
+        end
+        return true
+    end
+    local items = {
+        {
+            text_func = function()
+                return allEnabled() and _("Deselect all") or _("Select all")
+            end,
+            callback = function(touchmenu_instance)
+                local enable = not allEnabled()
+                for _, cat in ipairs(Categories.ALL) do
+                    if enable then
+                        scope[cat.id] = nil
+                    else
+                        scope[cat.id] = false
+                    end
+                end
+                self.settings:saveSetting("sync_categories", scope)
+                self.settings:flush()
+                if touchmenu_instance then touchmenu_instance:updateItems() end
+            end,
+            keep_menu_open = true,
+            separator = true,
+        },
+    }
     for _, cat in ipairs(Categories.ALL) do
         local c = cat
         table.insert(items, {
@@ -233,6 +265,24 @@ local function writeSettingsData(path, data)
     util.writeToFile(dump(data, nil, true), path, true, true)
 end
 
+--- Mirror a category's merged keys into the live G_reader_settings object.
+-- Needed for settings.reader.lua: without this, G_reader_settings:flush() on
+-- app exit overwrites the file we just wrote, discarding the sync.
+local function syncToGlobalSettings(category, merged_data)
+    local to_delete = {}
+    for key in pairs(G_reader_settings.data) do
+        if Categories.owns(category, key) then
+            to_delete[#to_delete + 1] = key
+        end
+    end
+    for _, key in ipairs(to_delete) do
+        G_reader_settings:delSetting(key)
+    end
+    for key, val in pairs(merged_data) do
+        G_reader_settings:saveSetting(key, val)
+    end
+end
+
 --- Merge pulled category data back into its source file.
 -- For partial-key categories this preserves all unrelated keys in the file.
 -- Excluded keys (device-specific) are always kept from local.
@@ -251,6 +301,9 @@ local function mergeCategoryIntoFile(category, merged_data)
         full[key] = val
     end
     writeSettingsData(category.local_path, full)
+    if category.local_path == READER_SETTINGS then
+        syncToGlobalSettings(category, merged_data)
+    end
 end
 
 
@@ -274,13 +327,12 @@ function SettingSync:showDeviceNameDialog()
                     callback = function()
                         local name = dialog:getInputText()
                         name = name and name:match("^%s*(.-)%s*$")  -- trim
-                        if name and name ~= "" then
-                            Devices.setName(self.settings, name)
-                            UIManager:show(Notification:new{
-                                text = _("Device name saved."),
-                                timeout = 2,
-                            })
-                        end
+                        -- empty → reset to default
+                        Devices.setName(self.settings, (name ~= "") and name or nil)
+                        UIManager:show(Notification:new{
+                            text = _("Device name saved."),
+                            timeout = 2,
+                        })
                         UIManager:close(dialog)
                     end,
                 },
@@ -378,7 +430,7 @@ function SettingSync:_doCategorySync(category, target_device_name)
         local ok = self:downloadFromCloud(remote_path, temp_path)
 
         -- Extract local category data from the category's source file
-        local source_path = category.local_path or (DATA_DIR .. "/settings.reader.lua")
+        local source_path = category.local_path or READER_SETTINGS
         local full_local = readSettingsData(source_path)
         local local_data = Categories.extract(full_local, category)
         local remote_data = ok and readSettingsData(temp_path) or {}
@@ -423,7 +475,7 @@ function SettingSync:_applyCategorySelections(
     end
 
     if has_pulls then
-        local source_path = category.local_path or (DATA_DIR .. "/settings.reader.lua")
+        local source_path = category.local_path or READER_SETTINGS
         local full_local = readSettingsData(source_path)
         local merged_category = Diff.applySelections(local_data, selections)
         -- Replace this category's portion of the file: drop its old keys, then
@@ -437,6 +489,9 @@ function SettingSync:_applyCategorySelections(
             full_local[key] = val
         end
         writeSettingsData(source_path, full_local)
+        if source_path == READER_SETTINGS then
+            syncToGlobalSettings(category, merged_category)
+        end
         logger.info("SettingSync: pulled", category.id, "category from", target_device_name)
     end
 

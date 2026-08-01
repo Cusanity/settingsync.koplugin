@@ -324,3 +324,72 @@ msgstr "我的備份 (%s)"
 
 msgid "Select source device"
 msgstr "選擇來源裝置"
+
+msgid "Status bar"
+msgstr "狀態列"
+
+msgid "Status bar layout, enabled items and saved presets."
+msgstr "狀態列佈局、啟用項目及已儲存的預設。"
+
+msgid "Status bar settings"
+msgstr "狀態列設定"
+
+msgid "Active mode"
+msgstr "目前模式"
+
+msgid "Custom text"
+msgstr "自訂文字"
+
+msgid "Custom text repetitions"
+msgstr "自訂文字重複次數"
+
+msgid "Saved presets"
+msgstr "已儲存的預設"
+
+msgid "Select all"
+msgstr "全選"
+
+msgid "Deselect all"
+msgstr "全不選"
+
+msgid "KOReader core settings"
+msgstr "KOReader 核心設定"
+
+msgid "Screen"
+msgstr "螢幕"
+
+msgid "Screen and display settings."
+msgstr "螢幕與顯示設定。"
+
+msgid "Network"
+msgstr "網路"
+
+msgid "Network and Wi-Fi settings."
+msgstr "網路與Wi-Fi設定。"
+
+msgid "Navigation"
+msgstr "導航"
+
+msgid "Navigation, button and gesture settings."
+msgstr "導航、按鍵與手勢設定。"
+
+msgid "Document"
+msgstr "文件"
+
+msgid "Document handling and metadata settings."
+msgstr "文件處理與中繼資料設定。"
+
+msgid "Language"
+msgstr "語言"
+
+msgid "Language, units and time format."
+msgstr "語言、單位與時間格式。"
+
+msgid "Device"
+msgstr "裝置"
+
+msgid "Device-specific hardware settings."
+msgstr "裝置專屬硬體設定。"
+
+msgid "No categories enabled. Open \"What to sync\" to choose."
+msgstr "未啟用任何類別。請開啟\u300c同步內容\u300d進行選擇。"

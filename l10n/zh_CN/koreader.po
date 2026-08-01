@@ -324,3 +324,72 @@ msgstr "我的备份 (%s)"
 
 msgid "Select source device"
 msgstr "选择来源设备"
+
+msgid "Status bar"
+msgstr "状态栏"
+
+msgid "Status bar layout, enabled items and saved presets."
+msgstr "状态栏布局、启用项目及已保存的预设。"
+
+msgid "Status bar settings"
+msgstr "状态栏设置"
+
+msgid "Active mode"
+msgstr "当前模式"
+
+msgid "Custom text"
+msgstr "自定义文本"
+
+msgid "Custom text repetitions"
+msgstr "自定义文本重复次数"
+
+msgid "Saved presets"
+msgstr "已保存的预设"
+
+msgid "Select all"
+msgstr "全选"
+
+msgid "Deselect all"
+msgstr "全不选"
+
+msgid "KOReader core settings"
+msgstr "KOReader 核心设置"
+
+msgid "Screen"
+msgstr "屏幕"
+
+msgid "Screen and display settings."
+msgstr "屏幕与显示设置。"
+
+msgid "Network"
+msgstr "网络"
+
+msgid "Network and Wi-Fi settings."
+msgstr "网络与Wi-Fi设置。"
+
+msgid "Navigation"
+msgstr "导航"
+
+msgid "Navigation, button and gesture settings."
+msgstr "导航、按键与手势设置。"
+
+msgid "Document"
+msgstr "文档"
+
+msgid "Document handling and metadata settings."
+msgstr "文档处理与元数据设置。"
+
+msgid "Language"
+msgstr "语言"
+
+msgid "Language, units and time format."
+msgstr "语言、单位与时间格式。"
+
+msgid "Device"
+msgstr "设备"
+
+msgid "Device-specific hardware settings."
+msgstr "设备专属硬件设置。"
+
+msgid "No categories enabled. Open \"What to sync\" to choose."
+msgstr "未启用任何类别。请打开\u201c同步内容\u201d进行选择。"
