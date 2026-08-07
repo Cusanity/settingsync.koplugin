@@ -34,6 +34,27 @@ local READER_SETTINGS = DATA_DIR .. "/settings.reader.lua"
 -- Temp directory for downloaded cloud files during diff
 local TEMP_DIR = DATA_DIR .. "/cache/settingsync"
 
+-- KOReader used to ship a standalone frontend/apps/cloudstorage/syncservice module;
+-- newer versions removed it and folded its logic into the cloudstorage.koplugin
+-- plugin instance (self.ui.cloudstorage) instead. Support both so this plugin keeps
+-- working regardless of which KOReader version the user is on. Returns a table with
+-- .getReadablePath(server) and :onShowCloudStorageList(callback), or nil.
+local function get_cloud_sync(ui)
+    local ok, OldSyncService = pcall(require, "frontend/apps/cloudstorage/syncservice")
+    if ok and OldSyncService then
+        return {
+            getReadablePath = OldSyncService.getReadablePath,
+            onShowCloudStorageList = function(_, callback)
+                local dialog = OldSyncService:new{}
+                dialog.onClose = function(this) UIManager:close(this) end
+                dialog.onConfirm = callback
+                UIManager:show(dialog)
+            end,
+        }
+    end
+    return ui and ui.cloudstorage
+end
+
 local SettingSync = WidgetContainer:extend{
     name = "settingsync",
     is_doc_only = false,
@@ -523,7 +544,7 @@ end
 
 --- Show the cloud service configuration dialog (uses the cloudstorage plugin's picker).
 function SettingSync:showCloudConfig(touchmenu_instance)
-    local cs = self.ui.cloudstorage
+    local cs = get_cloud_sync(self.ui)
     if not cs then
         UIManager:show(InfoMessage:new{
             text = _("The Cloud storage plugin is required for syncing but isn't available."),
@@ -581,7 +602,7 @@ function SettingSync:showCloudConfig(touchmenu_instance)
 end
 
 function SettingSync:openCloudPicker(touchmenu_instance)
-    local cs = self.ui.cloudstorage
+    local cs = get_cloud_sync(self.ui)
     if not cs then
         UIManager:show(InfoMessage:new{
             text = _("The Cloud storage plugin is required for syncing but isn't available."),
