@@ -13,9 +13,9 @@ local InputDialog = require("ui/widget/inputdialog")
 local LuaSettings = require("luasettings")
 local NetworkMgr = require("ui/network/manager")
 local Notification = require("ui/widget/notification")
-local SyncService = require("frontend/apps/cloudstorage/syncservice")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
+local WebDavApi = require("webdavapi")
 local dump = require("dump")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
@@ -521,8 +521,15 @@ function SettingSync:_applyCategorySelections(
     end
 end
 
---- Show the cloud service configuration dialog (reuses KOReader's SyncService picker).
+--- Show the cloud service configuration dialog (uses the cloudstorage plugin's picker).
 function SettingSync:showCloudConfig(touchmenu_instance)
+    local cs = self.ui.cloudstorage
+    if not cs then
+        UIManager:show(InfoMessage:new{
+            text = _("The Cloud storage plugin is required for syncing but isn't available."),
+        })
+        return
+    end
     local server = self.settings:readSetting("sync_server")
     if server then
         -- Already configured: show info + edit/delete
@@ -533,7 +540,7 @@ function SettingSync:showCloudConfig(touchmenu_instance)
         local dialogue
         dialogue = ButtonDialog:new{
             title = T(_("Cloud service:\n%1\n\nSync folder:\n%2"),
-                server.name .. type_label, SyncService.getReadablePath(server)),
+                server.name .. type_label, cs.getReadablePath(server)),
             buttons = {
                 {
                     {
@@ -574,11 +581,14 @@ function SettingSync:showCloudConfig(touchmenu_instance)
 end
 
 function SettingSync:openCloudPicker(touchmenu_instance)
-    local sync_settings = SyncService:new{}
-    sync_settings.onClose = function(this)
-        UIManager:close(this)
+    local cs = self.ui.cloudstorage
+    if not cs then
+        UIManager:show(InfoMessage:new{
+            text = _("The Cloud storage plugin is required for syncing but isn't available."),
+        })
+        return
     end
-    sync_settings.onConfirm = function(sv)
+    cs:onShowCloudStorageList(function(sv)
         self.settings:saveSetting("sync_server", sv)
         self.settings:flush()
         if touchmenu_instance then touchmenu_instance:updateItems() end
@@ -586,15 +596,13 @@ function SettingSync:openCloudPicker(touchmenu_instance)
             text = _("Cloud service configured."),
             timeout = 2,
         })
-    end
-    UIManager:show(sync_settings)
+    end)
 end
 --- Download a single file from cloud. Returns true on success.
 function SettingSync:downloadFromCloud(remote_name, local_dest)
     local server = self.settings:readSetting("sync_server")
     if not server then return false end
 
-    local WebDavApi = require("apps/cloudstorage/webdavapi")
     local file_url = WebDavApi:getJoinedPath(server.address, server.url or "")
     file_url = WebDavApi:getJoinedPath(file_url, remote_name)
 
@@ -607,7 +615,6 @@ function SettingSync:uploadToCloud(local_path, remote_name)
     local server = self.settings:readSetting("sync_server")
     if not server then return false end
 
-    local WebDavApi = require("apps/cloudstorage/webdavapi")
     local file_url = WebDavApi:getJoinedPath(server.address, server.url or "")
     file_url = WebDavApi:getJoinedPath(file_url, remote_name)
 
@@ -620,7 +627,6 @@ function SettingSync:ensureRemoteDirs(remote_name)
     local server = self.settings:readSetting("sync_server")
     if not server then return end
 
-    local WebDavApi = require("apps/cloudstorage/webdavapi")
     local base_url = WebDavApi:getJoinedPath(server.address, server.url or "")
 
     -- Split remote_name into path segments and create each directory

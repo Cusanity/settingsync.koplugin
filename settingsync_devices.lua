@@ -31,7 +31,7 @@ end
 --- List device names found in the cloud by listing the  devices/  folder.
 -- Returns a sorted list of device name strings, or {} on any error.
 function Devices.listFromCloud(server)
-    local WebDavApi = require("apps/cloudstorage/webdavapi")
+    local WebDavApi = require("webdavapi")
     local base_url = WebDavApi:getJoinedPath(server.address, server.url or "")
     local devices_url = WebDavApi:getJoinedPath(base_url, "devices")
     local ok, items = pcall(
