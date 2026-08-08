@@ -15,7 +15,6 @@ local NetworkMgr = require("ui/network/manager")
 local Notification = require("ui/widget/notification")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
-local WebDavApi = require("webdavapi")
 local dump = require("dump")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
@@ -33,6 +32,10 @@ local READER_SETTINGS = DATA_DIR .. "/settings.reader.lua"
 
 -- Temp directory for downloaded cloud files during diff
 local TEMP_DIR = DATA_DIR .. "/cache/settingsync"
+
+local function get_webdav_api()
+    return require("webdavapi")
+end
 
 -- KOReader used to ship a standalone frontend/apps/cloudstorage/syncservice module;
 -- newer versions removed it and folded its logic into the cloudstorage.koplugin
@@ -624,6 +627,7 @@ function SettingSync:downloadFromCloud(remote_name, local_dest)
     local server = self.settings:readSetting("sync_server")
     if not server then return false end
 
+    local WebDavApi = get_webdav_api()
     local file_url = WebDavApi:getJoinedPath(server.address, server.url or "")
     file_url = WebDavApi:getJoinedPath(file_url, remote_name)
 
@@ -636,6 +640,7 @@ function SettingSync:uploadToCloud(local_path, remote_name)
     local server = self.settings:readSetting("sync_server")
     if not server then return false end
 
+    local WebDavApi = get_webdav_api()
     local file_url = WebDavApi:getJoinedPath(server.address, server.url or "")
     file_url = WebDavApi:getJoinedPath(file_url, remote_name)
 
@@ -648,6 +653,7 @@ function SettingSync:ensureRemoteDirs(remote_name)
     local server = self.settings:readSetting("sync_server")
     if not server then return end
 
+    local WebDavApi = get_webdav_api()
     local base_url = WebDavApi:getJoinedPath(server.address, server.url or "")
 
     -- Split remote_name into path segments and create each directory
