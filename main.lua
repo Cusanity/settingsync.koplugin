@@ -68,12 +68,35 @@ function SettingSync:init()
     self.ui.menu:registerToMainMenu(self)
 end
 
---- Return the categories the user has enabled for sync (defaults to all on).
+--- All sync categories: the static list plus per-plugin settings and configuration.lua
+--- files discovered on disk.
+function SettingSync:getAllCategories()
+    return Categories.all()
+end
+
+--- Whether a category is currently selected for sync. Categories the user never saw fall
+--- back to their last "select/deselect all" choice, so plugins installed later inherit it
+--- instead of silently switching themselves on. Categories flagged `default_off` (those
+--- that pull in code this device will execute) stay off regardless.
+local function categoryEnabled(scope, category, default_all)
+    local choice = scope[category.id]
+    if choice ~= nil then return choice ~= false end
+    if category.default_off then return false end
+    return default_all ~= false
+end
+
+--- The fallback state for categories with no explicit choice yet.
+function SettingSync:categoryDefault()
+    return self.settings:readSetting("sync_categories_default")
+end
+
+--- Return the categories the user has enabled for sync.
 function SettingSync:getEnabledCategories()
     local scope = self.settings:readSetting("sync_categories", {})
+    local default_all = self:categoryDefault()
     local enabled = {}
-    for _, cat in ipairs(Categories.ALL) do
-        if scope[cat.id] ~= false then
+    for _, cat in ipairs(self:getAllCategories()) do
+        if categoryEnabled(scope, cat, default_all) then
             table.insert(enabled, cat)
         end
     end
@@ -104,9 +127,7 @@ function SettingSync:buildMainMenu()
             callback = function() self:syncNow() end,
             hold_callback = function()
                 UIManager:show(InfoMessage:new{
-                    text = _("Compares this device with the cloud and merges the differences"
-                        .. " automatically. If the same setting was changed in both places,"
-                        .. " you decide which version to keep."),
+                    text = _("Compares this device with the cloud and merges the differences automatically. If the same setting was changed in both places, you decide which version to keep."),
                 })
             end,
         },
@@ -160,36 +181,34 @@ end
 --- "What to sync": one checkbox per defined category so users can toggle individual groups.
 function SettingSync:buildWhatToSyncMenu()
     local scope = self.settings:readSetting("sync_categories", {})
-    local function toggle(id)
-        if scope[id] == false then
-            scope[id] = nil
-        else
-            scope[id] = false
-        end
+    local function isOn(category)
+        return categoryEnabled(scope, category, self:categoryDefault())
+    end
+    local function toggle(category)
+        scope[category.id] = not isOn(category)
         self.settings:saveSetting("sync_categories", scope)
         self.settings:flush()
     end
-    local function allEnabled()
-        for _, cat in ipairs(Categories.ALL) do
-            if scope[cat.id] == false then return false end
+    -- "All on" is unreachable while any default_off category exists, so the button
+    -- flips on whether *anything* is selected instead.
+    local function anyEnabled()
+        for _, cat in ipairs(self:getAllCategories()) do
+            if isOn(cat) then return true end
         end
-        return true
+        return false
     end
     local items = {
         {
             text_func = function()
-                return allEnabled() and _("Deselect all") or _("Select all")
+                return anyEnabled() and _("Deselect all") or _("Select all")
             end,
             callback = function(touchmenu_instance)
-                local enable = not allEnabled()
-                for _, cat in ipairs(Categories.ALL) do
-                    if enable then
-                        scope[cat.id] = nil
-                    else
-                        scope[cat.id] = false
-                    end
+                local enable = not anyEnabled()
+                for _, cat in ipairs(self:getAllCategories()) do
+                    scope[cat.id] = enable and not cat.default_off
                 end
                 self.settings:saveSetting("sync_categories", scope)
+                self.settings:saveSetting("sync_categories_default", enable)
                 self.settings:flush()
                 if touchmenu_instance then touchmenu_instance:updateItems() end
             end,
@@ -197,13 +216,13 @@ function SettingSync:buildWhatToSyncMenu()
             separator = true,
         },
     }
-    for _, cat in ipairs(Categories.ALL) do
+    for _, cat in ipairs(self:getAllCategories()) do
         local c = cat
         table.insert(items, {
             text = c.label,
             help_text = c.description,
-            checked_func = function() return scope[c.id] ~= false end,
-            callback = function() toggle(c.id) end,
+            checked_func = function() return isOn(c) end,
+            callback = function() toggle(c) end,
         })
     end
     return items
@@ -245,7 +264,7 @@ end
 --- Per-category restore entries (device-specific groups such as gestures).
 function SettingSync:buildRestoreMenu()
     local items = {}
-    for _, cat in ipairs(Categories.ALL) do
+    for _, cat in ipairs(self:getAllCategories()) do
         local c = cat
         table.insert(items, {
             text = c.label,
@@ -266,25 +285,171 @@ local function ensureTempDir()
     end
 end
 
---- Read a Lua settings file and return its data table.
--- Returns empty table if file doesn't exist or is unreadable.
-local function readSettingsData(path)
-    if lfs.attributes(path, "mode") ~= "file" then
-        return {}
+--- Collect a directory's matching files into { [path relative to dir] = contents }.
+local function readDirFiles(dir, pattern, prefix, out)
+    out = out or {}
+    prefix = prefix or ""
+    if lfs.attributes(dir, "mode") ~= "directory" then return out end
+    for name in lfs.dir(dir) do
+        -- "._" files are macOS resource forks, as KOReader's own tweak scanner skips too.
+        if name ~= "." and name ~= ".." and name:sub(1, 2) ~= "._" then
+            local path = dir .. "/" .. name
+            local mode = lfs.attributes(path, "mode")
+            if mode == "directory" then
+                readDirFiles(path, pattern, prefix .. name .. "/", out)
+            elseif mode == "file" and name:match(pattern) then
+                local f = io.open(path, "r")
+                if f then
+                    out[prefix .. name] = f:read("*a")
+                    f:close()
+                end
+            end
+        end
     end
-    local ok, data = pcall(dofile, path)
-    if ok and type(data) == "table" then
-        return data
-    end
-    return {}
+    return out
 end
 
---- Write a Lua settings table to a file.
-local function writeSettingsData(path, data)
+--- The cloud supplies these file names, so anything that could escape the category's
+--- directory or change a file of another type is dropped rather than written.
+local function isSafeRelPath(name, pattern)
+    return type(name) == "string"
+        and name:match("^[%w%._%- /]+$") ~= nil
+        and not name:match("%.%.")
+        and not name:match("^/")
+        and name:match(pattern) ~= nil
+end
+
+local function writeDirFiles(dir, pattern, data)
     local util = require("util")
+    for name, content in pairs(data) do
+        if type(content) == "string" and isSafeRelPath(name, pattern) then
+            local path = dir .. "/" .. name
+            local parent = path:match("(.*)/")
+            if parent and lfs.attributes(parent, "mode") ~= "directory" then
+                util.makePath(parent)
+            end
+            util.writeToFile(content, path, true, true)
+        else
+            logger.warn("SettingSync: refusing to write unexpected file name", name)
+        end
+    end
+end
+
+--- Evaluate a LuaSettings dump as data rather than running it. The file is often a copy
+-- just downloaded from the cloud, and this happens during diffing, before the user has
+-- approved anything -- dofile() would execute it either way. A dump is nothing but
+-- literals, so an empty environment costs a legitimate file nothing and neuters the rest.
+-- Returns the table, or nil plus a message.
+local function loadDump(path)
+    local util = require("util")
+    local content = util.readFromFile(path, "rb")
+    if not content then return nil, "cannot read file" end
+    -- A leading ESC marks a precompiled chunk, which LuaJIT would map in unchecked.
+    if content:byte(1) == 27 then return nil, "precompiled chunk rejected" end
+    local chunk, err
+    if setfenv then
+        chunk, err = loadstring(content, "@" .. path)
+        if chunk then setfenv(chunk, {}) end
+    else
+        chunk, err = load(content, "@" .. path, "t", {})
+    end
+    if not chunk then return nil, err end
+    local ok, data = pcall(chunk)
+    if not ok then return nil, data end
+    return data
+end
+
+--- Read a Lua settings file and return its data table. For `raw_file` categories
+-- (hand-edited plugin configuration.lua files) the file is read as opaque text and
+-- wrapped under a single "__file_content" key instead of being executed as Lua, so
+-- sync never has to parse or regenerate the user's source file. `dir_files` categories
+-- read a whole directory into one table keyed by relative path; that only applies to the
+-- category's own location, since its downloaded copy is a plain table dump.
+-- Returns the table plus an `ok` flag. `ok` is false only when the file exists but could
+-- not be read or parsed: callers must then skip the category, since an unreadable file is
+-- indistinguishable from an empty one and writing it back would truncate it.
+local function loadSettingsData(path, category)
+    if category and category.dir_files and path == category.local_path then
+        return readDirFiles(path, category.dir_files), true
+    end
+    if path == READER_SETTINGS then
+        -- Settings changed this session live only in memory; without this the diff would
+        -- be computed against a stale file and the merge would revert them.
+        G_reader_settings:flush()
+    end
+    if lfs.attributes(path, "mode") ~= "file" then
+        return {}, true
+    end
+    if category and category.raw_file then
+        local f = io.open(path, "r")
+        if not f then
+            logger.warn("SettingSync: cannot open", path)
+            return {}, false
+        end
+        local content = f:read("*a")
+        f:close()
+        return { __file_content = content }, true
+    end
+    local data, err = loadDump(path)
+    if type(data) == "table" then
+        return data, true
+    end
+    logger.warn("SettingSync: cannot parse", path, err)
+    return {}, false
+end
+
+--- True when `path` is the category's own on-device file rather than a downloaded copy.
+local function isSourcePath(path, category)
+    return path == (category and category.local_path or READER_SETTINGS)
+end
+
+--- Cached contents of the on-device source files, for the duration of one sync run.
+-- A dozen categories share settings.reader.lua, and re-reading it per category means a
+-- G_reader_settings:flush() (a full write + fsync) and a dofile() each time. Worse, a
+-- flush between two category merges writes the in-memory copy back over the merge just
+-- made, so caching is what keeps consecutive merges into the same file consistent.
+local source_cache = {}
+
+--- Drop the cache at the start of each user-initiated sync, so a run always begins from
+-- what is actually on disk.
+local function resetSourceCache()
+    source_cache = {}
+end
+
+local function readSettingsData(path, category)
+    if not isSourcePath(path, category) then
+        return loadSettingsData(path, category)
+    end
+    local cached = source_cache[path]
+    if not cached then
+        local data, ok = loadSettingsData(path, category)
+        cached = { data = data, ok = ok }
+        source_cache[path] = cached
+    end
+    return cached.data, cached.ok
+end
+
+--- Write a Lua settings table to a file. For `raw_file` categories, writes the
+-- "__file_content" string verbatim instead of dump()-serializing the table, so the
+-- user's hand-written comments and formatting survive a pull/push; for `dir_files`
+-- categories, writes each entry back as its own file. Files the table no longer mentions
+-- are left alone -- a pull adds and updates, it never deletes.
+local function writeSettingsData(path, data, category)
+    local util = require("util")
+    if isSourcePath(path, category) then
+        source_cache[path] = { data = data, ok = true }
+    end
+    if category and category.dir_files and path == category.local_path then
+        writeDirFiles(path, category.dir_files, data)
+        return
+    end
     local dir = path:match("(.*/)")
     if dir and lfs.attributes(dir, "mode") ~= "directory" then
         lfs.mkdir(dir)
+    end
+    if category and category.raw_file then
+        util.writeToFile(data.__file_content or "", path, true, true)
+        return
     end
     util.writeToFile(dump(data, nil, true), path, true, true)
 end
@@ -292,42 +457,46 @@ end
 --- Mirror a category's merged keys into the live G_reader_settings object.
 -- Needed for settings.reader.lua: without this, G_reader_settings:flush() on
 -- app exit overwrites the file we just wrote, discarding the sync.
-local function syncToGlobalSettings(category, merged_data)
-    local to_delete = {}
-    for key in pairs(G_reader_settings.data) do
-        if Categories.owns(category, key) then
-            to_delete[#to_delete + 1] = key
-        end
-    end
-    for _, key in ipairs(to_delete) do
-        G_reader_settings:delSetting(key)
-    end
+local function syncToGlobalSettings(merged_data)
     for key, val in pairs(merged_data) do
         G_reader_settings:saveSetting(key, val)
     end
 end
 
+--- Set when a pull rewrote a file some other plugin already has open as a LuaSettings
+--- object. Only settings.reader.lua is mirrored back into memory (syncToGlobalSettings);
+--- for every other file the new values are invisible until restart, and the owning plugin
+--- overwrites them when it flushes on exit.
+local restart_needed = false
+
+local function showRestartNoticeIfNeeded()
+    if not restart_needed then return end
+    restart_needed = false
+    UIManager:askForRestart(_("Some downloaded settings live in files KOReader already has open. Restart to apply them — otherwise they will be overwritten when you exit."))
+end
+
 --- Merge pulled category data back into its source file.
--- For partial-key categories this preserves all unrelated keys in the file.
--- Excluded keys (device-specific) are always kept from local.
+-- Purely additive: pulled keys are added or overwritten, everything already in the file is
+-- left alone. A setting that exists only on this device therefore survives even a force
+-- pull -- the cloud copy is a backup of another device's setup, not an inventory of what
+-- this one is allowed to keep, and the catch-all categories own enough of
+-- settings.reader.lua that deleting by absence would reset the device wholesale.
+-- Matches how `dir_files` categories already behave, since writeDirFiles only ever writes.
+-- Returns false without writing if the source file could not be read.
 local function mergeCategoryIntoFile(category, merged_data)
-    local full = readSettingsData(category.local_path)
-    local excluded = {}
-    if category.exclude_keys then
-        for _, ek in ipairs(category.exclude_keys) do excluded[ek] = true end
-    end
-    for key in pairs(full) do
-        if Categories.owns(category, key) and not excluded[key] then
-            full[key] = nil
-        end
-    end
+    local path = category.local_path or READER_SETTINGS
+    local full, ok = readSettingsData(path, category)
+    if not ok then return false end
     for key, val in pairs(merged_data) do
         full[key] = val
     end
-    writeSettingsData(category.local_path, full)
-    if category.local_path == READER_SETTINGS then
-        syncToGlobalSettings(category, merged_data)
+    writeSettingsData(path, full, category)
+    if path == READER_SETTINGS then
+        syncToGlobalSettings(merged_data)
+    else
+        restart_needed = true
     end
+    return true
 end
 
 
@@ -443,7 +612,7 @@ end
 function SettingSync:_doCategorySync(category, target_device_name)
     ensureTempDir()
     local remote_path = Devices.remotePath(target_device_name, category.remote_name)
-    local temp_path = TEMP_DIR .. "/" .. target_device_name .. "_" .. category.remote_name
+    local temp_path = TEMP_DIR .. "/" .. target_device_name .. "_" .. category.remote_name:gsub("/", "_")
 
     UIManager:show(InfoMessage:new{
         text = _("Downloading settings from cloud…"),
@@ -451,14 +620,22 @@ function SettingSync:_doCategorySync(category, target_device_name)
     })
 
     UIManager:scheduleIn(0.5, function()
+        resetSourceCache()
         local ok = self:downloadFromCloud(remote_path, temp_path)
 
         -- Extract local category data from the category's source file
         local source_path = category.local_path or READER_SETTINGS
-        local full_local = readSettingsData(source_path)
-        local local_data = Categories.extract(full_local, category)
-        local remote_data = ok and readSettingsData(temp_path) or {}
+        local full_local, readable = readSettingsData(source_path, category)
+        local remote_data = ok and Categories.extract(readSettingsData(temp_path, category), category) or {}
         os.remove(temp_path)
+        if not readable then
+            UIManager:show(InfoMessage:new{
+                text = string.format(_("Could not read the local file for %s. Skipping it."), category.label),
+                timeout = 3,
+            })
+            return
+        end
+        local local_data = Categories.extract(full_local, category)
 
         local diff = Diff.compare(local_data, remote_data)
         local changes = Diff.changesOnly(diff)
@@ -499,24 +676,15 @@ function SettingSync:_applyCategorySelections(
     end
 
     if has_pulls then
-        local source_path = category.local_path or READER_SETTINGS
-        local full_local = readSettingsData(source_path)
         local merged_category = Diff.applySelections(local_data, selections)
-        -- Replace this category's portion of the file: drop its old keys, then
-        -- write back the merged set (covers keys/key_prefix/all_keys modes).
-        for key in pairs(full_local) do
-            if Categories.owns(category, key) then
-                full_local[key] = nil
-            end
+        if mergeCategoryIntoFile(category, merged_category) then
+            logger.info("SettingSync: pulled", category.id, "category from", target_device_name)
+        else
+            UIManager:show(InfoMessage:new{
+                text = string.format(_("Could not read the local file for %s. Nothing was changed."), category.label),
+                timeout = 3,
+            })
         end
-        for key, val in pairs(merged_category) do
-            full_local[key] = val
-        end
-        writeSettingsData(source_path, full_local)
-        if source_path == READER_SETTINGS then
-            syncToGlobalSettings(category, merged_category)
-        end
-        logger.info("SettingSync: pulled", category.id, "category from", target_device_name)
     end
 
     if has_pushes then
@@ -528,8 +696,8 @@ function SettingSync:_applyCategorySelections(
         end
         local merged_remote = Diff.applySelections(remote_data, push_sels)
         ensureTempDir()
-        local temp_path = TEMP_DIR .. "/" .. my_name .. "_" .. category.remote_name .. ".push"
-        writeSettingsData(temp_path, merged_remote)
+        local temp_path = TEMP_DIR .. "/" .. my_name .. "_" .. category.remote_name:gsub("/", "_") .. ".push"
+        writeSettingsData(temp_path, merged_remote, category)
         local remote_path = Devices.remotePath(my_name, category.remote_name)
         self:ensureRemoteDirs(remote_path)
         local ok = self:uploadToCloud(temp_path, remote_path)
@@ -543,6 +711,8 @@ function SettingSync:_applyCategorySelections(
             })
         end
     end
+
+    showRestartNoticeIfNeeded()
 end
 
 --- Show the cloud service configuration dialog (uses the cloudstorage plugin's picker).
@@ -698,6 +868,7 @@ function SettingSync:_doDiffAndSync()
 
     -- We schedule the actual work to let the InfoMessage render
     UIManager:scheduleIn(0.5, function()
+        resetSourceCache()
         local all_diffs = {}
         local my_name = Devices.currentName(self.settings)
 
@@ -706,21 +877,14 @@ function SettingSync:_doDiffAndSync()
             local temp_path = TEMP_DIR .. "/" .. cat.remote_name:gsub("/", "_")
             local ok = self:downloadFromCloud(remote_path, temp_path)
 
-            local full_local = readSettingsData(cat.local_path)
+            local full_local, readable = readSettingsData(cat.local_path or READER_SETTINGS, cat)
             local local_data = Categories.extract(full_local, cat)
-            local remote_data = ok and readSettingsData(temp_path) or {}
-
-            if cat.exclude_keys then
-                for _, ek in ipairs(cat.exclude_keys) do
-                    local_data[ek] = nil
-                    remote_data[ek] = nil
-                end
-            end
+            local remote_data = ok and Categories.extract(readSettingsData(temp_path, cat), cat) or {}
 
             local diff = Diff.compare(local_data, remote_data)
             local changes = Diff.changesOnly(diff)
 
-            if #changes > 0 then
+            if readable and #changes > 0 then
                 table.insert(all_diffs, {
                     source = cat,
                     diff = diff,
@@ -753,6 +917,7 @@ function SettingSync:showDiffChain(all_diffs, index)
             text = _("Sync complete."),
             timeout = 2,
         })
+        showRestartNoticeIfNeeded()
         return
     end
 
@@ -760,6 +925,7 @@ function SettingSync:showDiffChain(all_diffs, index)
     local viewer = DiffViewer:new{
         diff = item.diff,
         source_label = item.source.label .. " (" .. #item.changes .. _(" changes") .. ")",
+        category = item.source,
         on_apply = function(selections)
             self:applyDiffSelections(item, selections)
             -- Continue to next source
@@ -783,8 +949,14 @@ function SettingSync:applyDiffSelections(item, selections)
         -- Apply pull: merge remote values into local
         local merged = Diff.applySelections(item.local_data, selections)
         -- Category-aware merge-back: preserves unrelated keys and excluded keys.
-        mergeCategoryIntoFile(item.source, merged)
-        logger.info("SettingSync: pulled changes into", item.source.local_path)
+        if mergeCategoryIntoFile(item.source, merged) then
+            logger.info("SettingSync: pulled changes into", item.source.local_path)
+        else
+            UIManager:show(InfoMessage:new{
+                text = string.format(_("Could not read the local file for %s. Nothing was changed."), item.source.label),
+                timeout = 3,
+            })
+        end
     end
 
     if has_pushes then
@@ -799,7 +971,7 @@ function SettingSync:applyDiffSelections(item, selections)
         -- Write to temp, upload, clean up
         ensureTempDir()
         local temp_path = TEMP_DIR .. "/" .. item.source.remote_name:gsub("/", "_") .. ".push"
-        writeSettingsData(temp_path, merged_remote)
+        writeSettingsData(temp_path, merged_remote, item.source)
         local my_name = Devices.currentName(self.settings)
         local remote_path = Devices.remotePath(my_name, item.source.remote_name)
         self:ensureRemoteDirs(remote_path)
@@ -836,6 +1008,7 @@ end
 
 function SettingSync:_doQuickSync(direction)
     ensureTempDir()
+    resetSourceCache()
     local categories = self:getEnabledCategories()
     local my_name = Devices.currentName(self.settings)
     local success_count = 0
@@ -844,14 +1017,13 @@ function SettingSync:_doQuickSync(direction)
     for _, cat in ipairs(categories) do
         local remote_path = Devices.remotePath(my_name, cat.remote_name)
         if direction == "push" then
-            local full_local = readSettingsData(cat.local_path)
+            local full_local, readable = readSettingsData(cat.local_path or READER_SETTINGS, cat)
             local cat_data = Categories.extract(full_local, cat)
-            if cat.exclude_keys then
-                for _, ek in ipairs(cat.exclude_keys) do cat_data[ek] = nil end
-            end
-            if next(cat_data) then
+            if not readable then
+                fail_count = fail_count + 1
+            elseif next(cat_data) then
                 local temp_path = TEMP_DIR .. "/" .. cat.remote_name:gsub("/", "_") .. ".push"
-                writeSettingsData(temp_path, cat_data)
+                writeSettingsData(temp_path, cat_data, cat)
                 self:ensureRemoteDirs(remote_path)
                 if self:uploadToCloud(temp_path, remote_path) then
                     success_count = success_count + 1
@@ -863,13 +1035,13 @@ function SettingSync:_doQuickSync(direction)
         elseif direction == "pull" then
             local temp_path = TEMP_DIR .. "/" .. cat.remote_name:gsub("/", "_")
             if self:downloadFromCloud(remote_path, temp_path) then
-                local remote_data = readSettingsData(temp_path)
+                local remote_data = Categories.extract(readSettingsData(temp_path, cat), cat)
                 if next(remote_data) then
-                    if cat.exclude_keys then
-                        for _, ek in ipairs(cat.exclude_keys) do remote_data[ek] = nil end
+                    if mergeCategoryIntoFile(cat, remote_data) then
+                        success_count = success_count + 1
+                    else
+                        fail_count = fail_count + 1
                     end
-                    mergeCategoryIntoFile(cat, remote_data)
-                    success_count = success_count + 1
                 end
             else
                 fail_count = fail_count + 1
@@ -888,6 +1060,7 @@ function SettingSync:_doQuickSync(direction)
         text = text,
         timeout = 3,
     })
+    showRestartNoticeIfNeeded()
 end
 
 --- Smart one-tap sync: merges one-sided changes automatically and only asks
@@ -915,6 +1088,7 @@ function SettingSync:_doSyncNow()
 
     UIManager:show(InfoMessage:new{ text = _("Syncing…"), timeout = 1 })
     UIManager:scheduleIn(0.5, function()
+        resetSourceCache()
         local items = {}
         local conflicts = {}
         local my_name = Devices.currentName(self.settings)
@@ -923,36 +1097,31 @@ function SettingSync:_doSyncNow()
             local remote_path = Devices.remotePath(my_name, cat.remote_name)
             local temp_path = TEMP_DIR .. "/" .. cat.remote_name:gsub("/", "_")
             local ok = self:downloadFromCloud(remote_path, temp_path)
-            local full_local = readSettingsData(cat.local_path)
+            local full_local, readable = readSettingsData(cat.local_path or READER_SETTINGS, cat)
             local local_data = Categories.extract(full_local, cat)
-            local remote_data = ok and readSettingsData(temp_path) or {}
+            local remote_data = ok and Categories.extract(readSettingsData(temp_path, cat), cat) or {}
             os.remove(temp_path)
 
-            if cat.exclude_keys then
-                for _, ek in ipairs(cat.exclude_keys) do
-                    local_data[ek] = nil
-                    remote_data[ek] = nil
+            if readable then
+                local item = {
+                    source = cat,
+                    local_data = local_data,
+                    remote_data = remote_data,
+                    selections = {},
+                }
+                for _, entry in ipairs(Diff.compare(local_data, remote_data)) do
+                    if entry.status == Diff.ADDED then
+                        -- local only → upload
+                        table.insert(item.selections, { entry = entry, direction = "push" })
+                    elseif entry.status == Diff.REMOVED then
+                        -- cloud only → download
+                        table.insert(item.selections, { entry = entry, direction = "pull" })
+                    elseif entry.status == Diff.MODIFIED then
+                        table.insert(conflicts, { item = item, entry = entry })
+                    end
                 end
+                table.insert(items, item)
             end
-
-            local item = {
-                source = cat,
-                local_data = local_data,
-                remote_data = remote_data,
-                selections = {},
-            }
-            for _, entry in ipairs(Diff.compare(local_data, remote_data)) do
-                if entry.status == Diff.ADDED then
-                    -- local only → upload
-                    table.insert(item.selections, { entry = entry, direction = "push" })
-                elseif entry.status == Diff.REMOVED then
-                    -- cloud only → download
-                    table.insert(item.selections, { entry = entry, direction = "pull" })
-                elseif entry.status == Diff.MODIFIED then
-                    table.insert(conflicts, { item = item, entry = entry })
-                end
-            end
-            table.insert(items, item)
         end
 
         if #conflicts == 0 then
@@ -986,6 +1155,7 @@ function SettingSync:_finishSyncNow(items)
         text = string.format(_("Sync complete: %d uploaded, %d downloaded."), n_push, n_pull)
     end
     UIManager:show(Notification:new{ text = text, timeout = 3 })
+    showRestartNoticeIfNeeded()
 end
 
 --- Ask the user how to resolve settings changed on both sides.

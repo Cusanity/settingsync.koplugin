@@ -34,13 +34,24 @@ function Diff.deepEqual(a, b)
     return true
 end
 
+--- Drop a trailing UTF-8 sequence that a byte-wise cut left incomplete, so truncating
+--- never emits a broken character.
+local function trimPartialUtf8(s)
+    local tail = s:match("([\194-\244][\128-\191]*)$")
+    if not tail then return s end
+    local lead = tail:byte(1)
+    local needed = lead < 0xE0 and 2 or (lead < 0xF0 and 3 or 4)
+    if #tail >= needed then return s end
+    return s:sub(1, #s - #tail)
+end
+
 --- Produce a human-readable preview of a value.
 -- Tables are serialized via dump(); scalars are tostring()'d.
 -- Long strings are truncated.
 -- @param val any
 -- @param max_len number  (optional, default 120)
 -- @return string
-function Diff.prettyValue(val)
+function Diff.prettyValue(val, max_len)
     local s
     if type(val) == "table" then
         s = dump(val, nil, true)
@@ -51,6 +62,10 @@ function Diff.prettyValue(val)
     end
     -- Collapse to single line for display
     s = s:gsub("\n%s*", " ")
+    max_len = max_len or 120
+    if #s > max_len then
+        s = trimPartialUtf8(s:sub(1, max_len)) .. "…"
+    end
     return s
 end
 

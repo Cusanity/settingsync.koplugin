@@ -23,16 +23,6 @@ msgstr "設定同步"
 msgid "Synchronize KOReader settings across devices via WebDAV with per-key diff and selective sync."
 msgstr "透過 WebDAV 跨裝置同步 KOReader 設定，支援逐項比對和選擇性同步。"
 
-#: main.lua - source descriptions
-msgid "Global KOReader settings"
-msgstr "全域 KOReader 設定"
-
-msgid "Plugin settings: %s"
-msgstr "外掛設定：%s"
-
-msgid "Plugin config: %s"
-msgstr "外掛組態：%s"
-
 #: main.lua - main menu
 msgid "Sync now"
 msgstr "立即同步"
@@ -63,25 +53,6 @@ msgstr "尚未同步"
 
 msgid "Last synced: "
 msgstr "上次同步："
-
-#: main.lua - what to sync
-msgid "KOReader settings"
-msgstr "KOReader 設定"
-
-msgid "Reading, display and behaviour settings (settings.reader.lua)."
-msgstr "閱讀、顯示和行為設定 (settings.reader.lua)。"
-
-msgid "Plugin settings"
-msgstr "外掛設定"
-
-msgid "Settings saved by other installed plugins."
-msgstr "其他已安裝外掛儲存的設定。"
-
-msgid "Plugin configuration files"
-msgstr "外掛組態檔案"
-
-msgid "configuration.lua files bundled with plugins."
-msgstr "外掛附帶的 configuration.lua 檔案。"
 
 #: main.lua - advanced
 msgid "Review and choose each change…"
@@ -126,10 +97,6 @@ msgstr "關閉"
 
 msgid "Cloud service configured."
 msgstr "雲端服務設定完成。"
-
-#: main.lua - diff & sync workflow
-msgid "No settings sources enabled. Check Sync scope settings."
-msgstr "未啟用任何設定來源。請檢查同步範圍設定。"
 
 msgid "Downloading settings from cloud…"
 msgstr "正在從雲端下載設定…"
@@ -246,8 +213,8 @@ msgstr "觸控手勢動作對映"
 msgid "Cloud storage & WebDAV"
 msgstr "雲端儲存與 WebDAV"
 
-msgid "Cloud servers, WebDAV list and default upload/download folders."
-msgstr "雲端伺服器、WebDAV 清單以及預設的上傳/下載資料夾。"
+msgid "Cloud servers and the WebDAV list. The local upload/download folders stay per-device."
+msgstr "雲端伺服器與 WebDAV 清單。本機的上傳/下載資料夾仍依裝置各自保留。"
 
 msgid "Highlight export"
 msgstr "匯出標註"
@@ -352,9 +319,6 @@ msgstr "全選"
 msgid "Deselect all"
 msgstr "全不選"
 
-msgid "KOReader core settings"
-msgstr "KOReader 核心設定"
-
 msgid "Screen"
 msgstr "螢幕"
 
@@ -393,3 +357,69 @@ msgstr "裝置專屬硬體設定。"
 
 msgid "No categories enabled. Open \"What to sync\" to choose."
 msgstr "未啟用任何類別。請開啟\u300c同步內容\u300d進行選擇。"
+
+msgid "Other reader settings"
+msgstr "其他閱讀器設定"
+
+msgid "Everything in settings.reader.lua that no other category covers. New KOReader settings land here automatically."
+msgstr "settings.reader.lua 中未被其他類別涵蓋的所有設定。KOReader 新增的設定會自動歸入此處。"
+
+msgid "%s settings"
+msgstr "%s 設定"
+
+msgid "Custom defaults"
+msgstr "自訂預設值"
+
+msgid "Advanced settings that override KOReader's built-in defaults. New overrides are picked up automatically."
+msgstr "覆寫 KOReader 內建預設值的進階設定。新增的覆寫項目會自動納入同步。"
+
+msgid "%s configuration file"
+msgstr "%s 設定檔"
+
+msgid "Whole-file backup of this plugin's hand-edited configuration file, which is where its API keys live. Pulling it replaces the local file with Lua the plugin will execute."
+msgstr "對該插件手動編輯的設定檔進行整檔案備份，其 API 金鑰即儲存於此。拉取會用插件將要執行的 Lua 替換本機檔案。"
+
+msgid "File contents"
+msgstr "檔案內容"
+
+msgid "%d bytes, %d lines"
+msgstr "%d 位元組，%d 行"
+
+msgid "The Cloud storage plugin is required for syncing but isn't available."
+msgstr "同步需要雲端儲存外掛，但該外掛無法使用。"
+
+msgid "Saved Wi-Fi networks"
+msgstr "已儲存的 Wi-Fi 網路"
+
+msgid "Access points remembered by KOReader, with their passwords, so another device joins the same networks."
+msgstr "KOReader 記住的無線存取點，連同密碼一起同步，讓另一台裝置也能連上相同網路。"
+
+msgid "Saved passwords"
+msgstr "已儲存的密碼"
+
+msgid "Logins kept in settings.reader.lua, such as the Calibre password and OPDS server accounts."
+msgstr "settings.reader.lua 中儲存的登入資訊，例如 Calibre 密碼和 OPDS 伺服器帳號。"
+
+msgid "Style tweaks"
+msgstr "樣式微調"
+
+msgid "Your own CSS files from styletweaks/. The setting that switches them on syncs with the reader settings, so both sides stay in step."
+msgstr "來自 styletweaks/ 的自訂 CSS 檔案。啟用它們的設定項會隨閱讀器設定一同同步，兩邊始終保持一致。"
+
+msgid "User patches"
+msgstr "使用者修補程式"
+
+msgid "Lua files from patches/, which KOReader runs at startup. Off by default: pulling one means executing code from your cloud on this device."
+msgstr "來自 patches/ 的 Lua 檔案，KOReader 會在啟動時執行。預設關閉：拉取意味著在本裝置上執行來自雲端的程式碼。"
+
+msgid "All settings stored in settings/%s by an installed plugin, including any accounts or tokens it keeps there."
+msgstr "已安裝插件儲存在 settings/%s 中的全部設定，包括其中儲存的帳號或權杖。"
+
+msgid "Could not read the local file for %s. Skipping it."
+msgstr "無法讀取 %s 的本機檔案，已略過。"
+
+msgid "Could not read the local file for %s. Nothing was changed."
+msgstr "無法讀取 %s 的本機檔案，未做任何變更。"
+
+msgid "Some downloaded settings live in files KOReader already has open. Restart to apply them — otherwise they will be overwritten when you exit."
+msgstr "部分下載的設定位於 KOReader 已開啟的檔案中。請重新啟動以套用——否則結束時它們會被覆寫。"

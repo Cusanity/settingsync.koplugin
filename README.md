@@ -14,9 +14,12 @@ Synchronize KOReader settings across devices via WebDAV with per-key diff and se
 - **Per-key diff view** – see exactly which settings differ between local and cloud
 - **Selective sync** – choose to push or pull individual keys, or bulk push/pull all
 - **WebDAV backend** – works with any WebDAV server (Nextcloud, Synology, etc.)
-- **Auto-discovery** – automatically scans `settings/` directory for plugin config files
-- **Device-specific exclusions** – keys like `device_id`, `lastdir`, `home_dir` are never overwritten
-- **Sync scope control** – choose which categories to sync: global settings, plugin settings, plugin configs
+- **Nothing left behind** – a catch-all category covers every reader setting no other
+  group claims, and `settings/*.lua`, plugin configuration files, `styletweaks/*.css` and
+  `patches/*.lua` files are discovered on disk, so settings added by a KOReader update or a
+  newly installed plugin sync without waiting for this plugin to be updated
+- **Device-specific exclusions** – paths and per-install state are filtered by name shape
+- **Sync scope control** – one checkbox per category under **What to sync**
 
 ## Installation
 
@@ -49,20 +52,29 @@ Synchronize KOReader settings across devices via WebDAV with per-key diff and se
 
 Both show a confirmation dialog before executing.
 
-## Excluded Keys
+## What never syncs
 
-The following device-specific keys are automatically excluded from sync:
+Rather than a hand-maintained key list, keys are filtered by the shape of their name, so
+a setting added by a future KOReader release is covered on day one:
 
-| Key | Reason |
-|-----|--------|
-| `device_id` | Unique per device |
-| `screen_mode` | Display-specific |
-| `home_dir`, `lastdir`, `lastfile` | Device filesystem paths |
-| `inbox_dir`, `screensaver_dir`, `screenshot_dir` | Device filesystem paths |
-| `last_migration_date` | Per-device migration state |
-| `quickstart_shown_version` | Per-device UI state |
-| `wifi_was_on` | Transient device state |
-| `SSH_port`, `SSH_allow_no_password` | Device-specific SSH config |
+| Rule | Examples | Reason |
+|------|----------|--------|
+| `*_dir`, `*_path`, `*_folder` | `home_dir`, `screensaver_dir`, `cover_image_path` | Device filesystem paths |
+| `last*` | `lastfile`, `last_migration_date` | Per-device state |
+| `dev_*` | `dev_abort_on_crash` | Developer/debug toggles |
+| `device_id` | – | Unique per device; sharing it breaks progress sync |
+
+Accounts, passwords, Wi-Fi credentials and API keys **do** sync – they are part of the
+setup you want on a new device. They are grouped into their own categories (**Saved
+passwords**, **Saved Wi-Fi networks**, per-plugin settings and configuration files) so you
+can switch them off if you would rather not, but they are on by default. Note that this
+means your cloud folder holds them in plain text; keep the WebDAV account private.
+
+## Off by default
+
+| Group | Why |
+|-------|-----|
+| User patches | `patches/*.lua` is executed by KOReader at startup, so pulling one runs code from your cloud on this device |
 
 ## License
 
