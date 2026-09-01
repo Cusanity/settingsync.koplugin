@@ -911,10 +911,13 @@ function SettingSync:_doDiffAndSync()
 end
 
 --- Show diff viewers one at a time for each source with changes.
-function SettingSync:showDiffChain(all_diffs, index)
+function SettingSync:showDiffChain(all_diffs, index, skipped)
+    skipped = skipped or 0
     if index > #all_diffs then
         UIManager:show(Notification:new{
-            text = _("Sync complete."),
+            text = skipped > 0
+                and string.format(_("Sync complete. %d group(s) skipped."), skipped)
+                or _("Sync complete."),
             timeout = 2,
         })
         showRestartNoticeIfNeeded()
@@ -929,7 +932,18 @@ function SettingSync:showDiffChain(all_diffs, index)
         on_apply = function(selections)
             self:applyDiffSelections(item, selections)
             -- Continue to next source
-            self:showDiffChain(all_diffs, index + 1)
+            self:showDiffChain(all_diffs, index + 1, skipped)
+        end,
+        on_skip = function()
+            self:showDiffChain(all_diffs, index + 1, skipped + 1)
+        end,
+        on_cancel = function()
+            UIManager:show(Notification:new{
+                text = string.format(_("Sync stopped. %d group(s) left unchanged."),
+                    #all_diffs - index + 1),
+                timeout = 3,
+            })
+            showRestartNoticeIfNeeded()
         end,
     }
     UIManager:show(viewer)
@@ -1191,6 +1205,14 @@ function SettingSync:_resolveConflicts(items, conflicts)
                 callback = function()
                     UIManager:close(dialog)
                     self:_reviewConflicts(items, conflicts)
+                end,
+            }},
+            {{
+                text = _("Skip them"),
+                callback = function()
+                    UIManager:close(dialog)
+                    -- Conflicts stay as they are on both sides; one-sided changes still sync.
+                    self:_finishSyncNow(items)
                 end,
             }},
             {{

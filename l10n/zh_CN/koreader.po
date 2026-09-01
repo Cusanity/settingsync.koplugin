@@ -110,6 +110,12 @@ msgstr " 项变更"
 msgid "Sync complete."
 msgstr "同步完成。"
 
+msgid "Sync complete. %d group(s) skipped."
+msgstr "同步完成。已跳过 %d 组。"
+
+msgid "Sync stopped. %d group(s) left unchanged."
+msgstr "同步已停止。%d 组未变更。"
+
 msgid "Failed to upload %s to cloud."
 msgstr "上传 %s 到云端失败。"
 
@@ -153,6 +159,9 @@ msgstr "保留云端"
 
 msgid "Choose for each…"
 msgstr "逐项选择…"
+
+msgid "Skip them"
+msgstr "跳过这些项"
 
 msgid "Synced %d file(s), %d failed."
 msgstr "已同步 %d 个文件，%d 个失败。"
@@ -199,6 +208,9 @@ msgstr "全部推送"
 
 msgid "Clear"
 msgstr "清除"
+
+msgid "Skip"
+msgstr "跳过"
 
 msgid "Cancel"
 msgstr "取消"

@@ -101,9 +101,10 @@ users:
    `applyDiffSelections`, stamps `last_sync = os.time()`, and shows a
    "%d uploaded, %d downloaded" summary.
 4. If there are conflicts, `_resolveConflicts()` shows a `ButtonDialog` offering
-   **Keep this device** (push all), **Keep cloud** (pull all), or **Choose for each…**
+   **Keep this device** (push all), **Keep cloud** (pull all), **Choose for each…**
    (`_reviewConflicts` applies the auto changes then opens the diff viewer limited to the
-   conflicting keys via `showDiffChain`).
+   conflicting keys via `showDiffChain`), or **Skip them** (conflicts stay as they are on
+   both sides, one-sided changes still sync).
 
 Invariants for agents:
 - `_doSyncNow` reuses `applyDiffSelections` for the actual writes/uploads — do **not**
@@ -446,6 +447,11 @@ side-effectful modules.
 
 `DiffViewer` calls `Diff.compare` then drives `on_apply(selections)` back into `main.lua`.
 `selections` is an array of `{entry = diff_entry, direction = "pull"|"push"}`.
+The viewer is also a chain step, so it reports the two ways out that change nothing:
+`on_skip()` (leave this group alone, caller moves to the next) and `on_cancel()` (stop the
+run here; also fired by the Cancel button and the close swipe). The **Skip** button only
+appears when the caller supplied `on_skip` — for a one-off viewer Cancel already means the
+same thing.
 
 ## i18n rule
 

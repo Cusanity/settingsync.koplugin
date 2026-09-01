@@ -41,6 +41,8 @@ local DiffViewer = InputContainer:extend{
     source_label = nil,  -- e.g. "settings.reader.lua"
     category = nil,      -- optional Categories.* table for display labels/formatters
     on_apply = nil,      -- callback(selections) called when user confirms
+    on_skip = nil,       -- callback() called when the user leaves this group unchanged
+    on_cancel = nil,     -- callback() called when the user stops here
     selections = nil,    -- { [idx] = "pull"|"push"|nil }
     scrollable = nil,    -- ScrollableContainer reference for scroll-position preservation
 }
@@ -227,6 +229,24 @@ function DiffViewer:buildUI()
     end
 
     -- Buttons (built first so we can measure their height)
+    local action_row = {
+        {
+            text = _("Cancel"),
+            callback = function() self:onClose() end,
+        },
+        {
+            text = _("Apply"),
+            callback = function() self:onApply() end,
+            enabled = true,
+        },
+    }
+    -- Only offered when the caller has somewhere to go next; otherwise Cancel is the same thing.
+    if self.on_skip then
+        table.insert(action_row, 1, {
+            text = _("Skip"),
+            callback = function() self:onSkip() end,
+        })
+    end
     local buttons = ButtonTable:new{
         width = inner_width,
         buttons = {
@@ -244,17 +264,7 @@ function DiffViewer:buildUI()
                     callback = function() self:clearSelections() end,
                 },
             },
-            {
-                {
-                    text = _("Cancel"),
-                    callback = function() self:onClose() end,
-                },
-                {
-                    text = _("Apply"),
-                    callback = function() self:onApply() end,
-                    enabled = true,
-                },
-            },
+            action_row,
         },
         show_parent = self,
     }
@@ -436,9 +446,23 @@ function DiffViewer:onApply()
     end
 end
 
+--- Leave this group exactly as it is on both sides and let the caller carry on with the
+--- next one. Cancel, by contrast, stops the whole run.
+function DiffViewer:onSkip()
+    UIManager:close(self)
+    UIManager:setDirty(nil, "full")
+    if self.on_skip then
+        self.on_skip()
+    end
+    return true
+end
+
 function DiffViewer:onClose()
     UIManager:close(self)
     UIManager:setDirty(nil, "full")
+    if self.on_cancel then
+        self.on_cancel()
+    end
     return true
 end
 

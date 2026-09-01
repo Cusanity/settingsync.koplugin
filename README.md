@@ -43,7 +43,8 @@ Synchronize KOReader settings across devices via WebDAV with per-key diff and se
 1. Tap **Diff & sync settings…** to compare local vs. cloud
 2. The diff viewer shows all changed keys with local and cloud values
 3. Tap individual rows to toggle push/pull, or use **Push all** / **Pull all**
-4. Tap **Apply** to execute the selected sync actions
+4. Tap **Apply** to execute the selected sync actions, **Skip** to leave this group of
+   settings untouched and move on to the next one, or **Cancel** to stop there
 
 ### Quick Sync
 
