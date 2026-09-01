@@ -19,6 +19,8 @@ Synchronize KOReader settings across devices via WebDAV with per-key diff and se
   `patches/*.lua` files are discovered on disk, so settings added by a KOReader update or a
   newly installed plugin sync without waiting for this plugin to be updated
 - **Device-specific exclusions** – paths and per-install state are filtered by name shape
+- **Device overview** – **Devices in cloud…** lists every device profile in the cloud
+  folder and what each one has backed up; tap a device to see its groups
 - **Sync scope control** – one checkbox per category under **What to sync**
 
 ## Installation

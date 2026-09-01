@@ -10,9 +10,11 @@ local ConfirmBox = require("ui/widget/confirmbox")
 local DataStorage = require("datastorage")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
+local KeyValuePage = require("ui/widget/keyvaluepage")
 local LuaSettings = require("luasettings")
 local NetworkMgr = require("ui/network/manager")
 local Notification = require("ui/widget/notification")
+local TextViewer = require("ui/widget/textviewer")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local dump = require("dump")
@@ -152,6 +154,13 @@ function SettingSync:buildMainMenu()
             end,
             keep_menu_open = true,
             callback = function() self:showDeviceNameDialog() end,
+        },
+        {
+            text = _("Devices in cloud…"),
+            help_text = _("Every device profile in the cloud folder and what each one has uploaded."),
+            enabled_func = server_ok,
+            keep_menu_open = true,
+            callback = function() self:showCloudDevices() end,
             separator = true,
         },
         {
@@ -533,6 +542,67 @@ function SettingSync:showDeviceNameDialog()
         },
     }
     UIManager:show(dialog)
+end
+
+--- Human label for a file in the cloud, so the device list reads like "What to sync"
+--- rather than like a directory listing. A name this device has no category for (a plugin
+--- it does not have installed) falls back to the file name.
+function SettingSync:remoteLabel(remote_name)
+    for _, cat in ipairs(self:getAllCategories()) do
+        if cat.remote_name == remote_name then return cat.label end
+    end
+    return remote_name
+end
+
+--- List every device profile in the cloud folder, with what each has backed up.
+function SettingSync:showCloudDevices()
+    local server = self.settings:readSetting("sync_server")
+    if not server then return end
+
+    NetworkMgr:runWhenOnline(function()
+        UIManager:show(InfoMessage:new{
+            text = _("Reading device list from cloud…"),
+            timeout = 1,
+        })
+        UIManager:scheduleIn(0.5, function()
+            local names = Devices.listFromCloud(server)
+            if #names == 0 then
+                UIManager:show(InfoMessage:new{
+                    text = _("No device backups found in the cloud yet. Sync once to create one."),
+                    timeout = 3,
+                })
+                return
+            end
+
+            local my_name = Devices.currentName(self.settings)
+            local kv_pairs = {}
+            -- Not "for _, name": `_` is the gettext alias, and shadowing it breaks the
+            -- _() calls in this loop body.
+            for _i, name in ipairs(names) do
+                local labels = {}
+                for _j, file in ipairs(Devices.listUploads(server, name)) do
+                    table.insert(labels, self:remoteLabel(file))
+                end
+                table.sort(labels)
+                table.insert(kv_pairs, {
+                    name == my_name and string.format(_("%s (this device)"), name) or name,
+                    #labels > 0 and string.format(_("%d groups"), #labels) or _("nothing uploaded"),
+                    callback = function()
+                        UIManager:show(TextViewer:new{
+                            title = name,
+                            text = #labels > 0 and table.concat(labels, "\n")
+                                or _("This device has not uploaded anything yet."),
+                        })
+                    end,
+                })
+            end
+
+            UIManager:show(KeyValuePage:new{
+                title = _("Devices in cloud"),
+                kv_pairs = kv_pairs,
+            })
+        end)
+    end)
 end
 
 --- Show a dialog letting the user choose which remote device to compare against.

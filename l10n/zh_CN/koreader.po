@@ -307,6 +307,33 @@ msgstr "例如：Kindle PW5"
 msgid "Device name saved."
 msgstr "设备名称已保存。"
 
+msgid "Devices in cloud…"
+msgstr "云端设备…"
+
+msgid "Every device profile in the cloud folder and what each one has uploaded."
+msgstr "云端文件夹中的所有设备配置，以及各自已上传的内容。"
+
+msgid "Reading device list from cloud…"
+msgstr "正在从云端读取设备列表…"
+
+msgid "No device backups found in the cloud yet. Sync once to create one."
+msgstr "云端尚无任何设备备份。先同步一次即可创建。"
+
+msgid "Devices in cloud"
+msgstr "云端设备"
+
+msgid "%s (this device)"
+msgstr "%s（本设备）"
+
+msgid "%d groups"
+msgstr "%d 组"
+
+msgid "nothing uploaded"
+msgstr "尚未上传"
+
+msgid "This device has not uploaded anything yet."
+msgstr "该设备尚未上传任何内容。"
+
 msgid "Sync: %s"
 msgstr "同步：%s"
 

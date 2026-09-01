@@ -41,7 +41,8 @@ choose which individual keys to push or pull before applying changes.
 - `settingsync_devices.lua` — device profile utilities. `Devices.currentName()` reads the
   user-assigned device name from plugin settings. `Devices.remotePath()` builds cloud
   paths like `devices/{device_name}/{remote_name}`. `Devices.listFromCloud()` discovers
-  device names by listing the `devices/` folder on the WebDAV server.
+  device names by listing the `devices/` folder on the WebDAV server, and
+  `Devices.listUploads()` lists one device's uploaded files.
 - `insert_menu.lua` — injects the `"settingsync"` entry into both the File Manager and
   Reader tool menus, after the `"statistics"` item.
 - `settingsync_gettext.lua` — pure-Lua gettext subset (adapted from `assistant.koplugin`).
@@ -64,7 +65,8 @@ SettingSync
 ├── {status line}               (enabled=false info: "Not set up yet" /
 │                                "Not synced yet" / "Last synced: …")   [separator]
 ├── Cloud account: {name}       (tap → configure; text_func)
-├── This device: {name}         (tap → rename; text_func)               [separator]
+├── This device: {name}         (tap → rename; text_func)
+├── Devices in cloud…           (showCloudDevices — every profile in devices/) [separator]
 ├── What to sync ▸              (buildWhatToSyncMenu — group toggles)    [separator]
 └── Advanced ▸                  (buildAdvancedMenu)
     ├── Review and choose each change…   (diffAndSync)                   [separator]
@@ -428,6 +430,16 @@ Device profiles are managed by `settingsync_devices.lua`:
 - Device-specific category files live at `devices/{device_name}/{remote_name}` in the
   cloud folder. `Devices.remotePath(name, remote_name)` builds this path.
 - `Devices.listFromCloud(server)` lists the `devices/` folder to discover known devices.
+- `Devices.listUploads(server, name)` lists what one device has uploaded, as remote names
+  relative to its folder. It issues its own Depth-1 `PROPFIND` rather than calling
+  `WebDavApi:listFolder()`, which hides every file KOReader has no reader for — and every
+  file this plugin uploads is a `.lua`. Sub-folders (`plugin_configs/`,
+  `plugin_settings/`) are walked within a fixed request budget.
+- **Devices in cloud…** (`SettingSync:showCloudDevices()`) shows the result as a
+  `KeyValuePage`: one row per profile, the current one marked, the value being how many
+  groups it has backed up; tapping a row lists them by category label
+  (`SettingSync:remoteLabel()` maps `remote_name` → label, falling back to the file name
+  for plugins this device does not have).
 - Users set their device name via **Device: {name}** in the SettingSync menu.
 
 ## Diff / apply contract
@@ -462,6 +474,10 @@ All user-visible strings **must** go through `settingsync_gettext.lua` (aliased 
 - When you add a new string, add it to **both** `l10n/zh_CN/koreader.po` and
   `l10n/zh_TW/koreader.po`.
 - Never hardcode a translated string directly in Lua files.
+- **Never bind `_` as a loop variable in a file that aliases `_` to gettext.**
+  `for _, v in ipairs(t)` shadows the alias for the whole loop body, so any `_("…")`
+  inside it crashes at runtime with *attempt to call local '_' (a number value)* — and
+  neither Luacheck nor `check_i18n.py` catches it. Use `_i` / `_j` instead.
 - **Never concatenate a non-ASCII string literal with `_()`.**  Patterns like
   `"\u2713 " .. _("key")` produce partially-translated strings that `check_i18n.py` will flag.
   Put the whole visible string into a dedicated translation key instead.
