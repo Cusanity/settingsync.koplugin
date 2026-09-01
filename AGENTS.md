@@ -303,9 +303,14 @@ This is how, e.g., assistant.koplugin's `configuration.lua` (provider/API keys s
   `data.__file_content` back out verbatim instead of calling `dump()`.
 - Because there's exactly one key, the existing per-key Diff/DiffViewer/conflict-resolution
   machinery works unmodified: a changed file shows up as one `MODIFIED`/`ADDED`/`REMOVED`
-  row (with a byte/line-count preview instead of the raw text), and "pull" vs "push"
-  becomes an atomic whole-file replace — never a partial merge that could produce invalid
-  Lua or destroy formatting.
+  row, and "pull" vs "push" becomes an atomic whole-file replace — never a partial merge
+  that could produce invalid Lua or destroy formatting.
+- The row body is a **git-style unified line diff** of the two file texts, not a preview of
+  the value: `Categories.isTextValue(category)` is true for `raw_file` and `dir_files`
+  categories, and `DiffViewer:buildTextDiff()` renders `Diff.unifiedHunks(Diff.textDiff(…))`
+  in a monospace face (`-` = local-only line, `+` = cloud-only line). The first
+  `DIFF_PREVIEW_LINES` lines are inline; holding the row opens the whole diff in a
+  `TextViewer` (`text_type = "code"`).
 - New plugins that ship a configuration file, and new keys added inside an existing one,
   are picked up automatically the next time the menu/categories are rebuilt — no code
   changes needed in this plugin.
@@ -433,6 +438,11 @@ side-effectful modules.
 - `Diff.changesOnly(entries)` — filters to `ADDED | REMOVED | MODIFIED` only.
 - `Diff.deepEqual(a, b)` — recursive value equality (used to classify `UNCHANGED`).
 - `Diff.prettyValue(val)` — single-line human-readable preview for display.
+- `Diff.textDiff(local_val, remote_val)` — line diff of two whole-file values (`-` local,
+  `+` cloud), with the common head/tail trimmed before an LCS alignment of the changed
+  region; past `DIFF_CELL_BUDGET` cells that region is reported as one block replacement.
+- `Diff.unifiedHunks(diff, context)` / `Diff.unifiedText(hunks)` — unified-diff hunks with
+  `@@` headers, and their flattened text for a full-screen viewer.
 
 `DiffViewer` calls `Diff.compare` then drives `on_apply(selections)` back into `main.lua`.
 `selections` is an array of `{entry = diff_entry, direction = "pull"|"push"}`.

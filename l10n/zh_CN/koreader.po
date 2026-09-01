@@ -170,6 +170,18 @@ msgstr "%d 项变更：%d 项修改，%d 项仅本地，%d 项仅云端"
 msgid "Tap a row to select: ⬇ Pull = take cloud value · ⬆ Push = send local value"
 msgstr "点击行选择：⬇ 拉取 = 取云端值 · ⬆ 推送 = 发送本地值"
 
+msgid "Tap a row to select: ⬇ Pull = take cloud file · ⬆ Push = send local file. Hold a row for the full diff."
+msgstr "点击行选择：⬇ 拉取 = 取云端文件 · ⬆ 推送 = 发送本地文件。长按查看完整差异。"
+
+msgid "%d lines only local (−) · %d lines only in cloud (+)"
+msgstr "%d 行仅本地（−）· %d 行仅云端（+）"
+
+msgid "… %d more diff lines, hold to see the whole diff"
+msgstr "…还有 %d 行差异，长按查看完整差异"
+
+msgid "Diff: %s"
+msgstr "差异：%s"
+
 msgid "⬇ Pull from cloud"
 msgstr "⬇ 从云端拉取"
 
@@ -384,9 +396,6 @@ msgstr "对该插件手动编辑的配置文件进行整文件备份，其 API �
 
 msgid "File contents"
 msgstr "文件内容"
-
-msgid "%d bytes, %d lines"
-msgstr "%d 字节，%d 行"
 
 msgid "The Cloud storage plugin is required for syncing but isn't available."
 msgstr "同步需要云存储插件，但该插件不可用。"

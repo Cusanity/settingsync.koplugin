@@ -16,15 +16,10 @@ local Categories = {}
 local SETTINGS_DIR = DataStorage:getSettingsDir()
 local READER_SETTINGS = DataStorage:getDataDir() .. "/settings.reader.lua"
 
--- Raw-file categories expose the whole file under one "__file_content" key.
-local function formatFileContent(val)
-    if type(val) ~= "string" then return Diff.prettyValue(val) end
-    local n_newlines = select(2, val:gsub("\n", "\n"))
-    return string.format(_("%d bytes, %d lines"), #val, n_newlines + 1)
-end
-
+-- Raw-file categories expose the whole file under one "__file_content" key. Values are
+-- file text, so the diff viewer line-diffs them (Categories.isTextValue) instead of
+-- printing a preview of the value.
 local FILE_CONTENT_LABELS = { __file_content = _("File contents") }
-local FILE_CONTENT_FORMATTERS = { __file_content = formatFileContent }
 
 -- Key-name patterns that never sync. Applied to every category whose keys are KOReader
 -- setting names (see isExcluded), so a device-specific key upstream adds tomorrow is
@@ -371,7 +366,6 @@ Categories.STYLE_TWEAKS = {
     remote_name        = "styletweaks.lua",
     dir_files          = "%.css$",
     all_keys           = true,
-    value_formatter    = formatFileContent,
 }
 
 Categories.USER_PATCHES = {
@@ -383,7 +377,6 @@ Categories.USER_PATCHES = {
     remote_name        = "userpatches.lua",
     dir_files          = "%.lua$",
     all_keys           = true,
-    value_formatter    = formatFileContent,
 }
 
 --- All registered categories in display order.
@@ -495,7 +488,6 @@ local function scanPluginConfigs(root, found, seen)
                         raw_file           = true,
                         keys               = { "__file_content" },
                         key_labels         = FILE_CONTENT_LABELS,
-                        value_formatters   = FILE_CONTENT_FORMATTERS,
                     })
                 end
             end
@@ -709,6 +701,13 @@ end
 -- Falls back to the raw key name if not defined.
 function Categories.keyLabel(category, key)
     return (category and category.key_labels and category.key_labels[key]) or key
+end
+
+--- True when a category's values are whole files of text (a hand-edited plugin config, a
+--- style tweak, a patch) rather than setting values, so the viewer can line-diff them
+--- instead of printing a one-line preview of an entire file.
+function Categories.isTextValue(category)
+    return category ~= nil and (category.raw_file or category.dir_files) ~= nil
 end
 
 --- Format a value for display, using the category's formatter or Diff.prettyValue.

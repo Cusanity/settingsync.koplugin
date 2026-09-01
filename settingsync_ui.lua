@@ -30,6 +30,10 @@ local _ = require("settingsync_gettext")
 local Categories = require("settingsync_categories")
 local Diff = require("settingsync_diff")
 
+-- Whole-file rows show an inline extract of the diff; the rest is one hold away.
+local DIFF_PREVIEW_LINES = 12
+local DIFF_CONTEXT_LINES = 2
+
 local DiffViewer = InputContainer:extend{
     width = nil,
     height = nil,
@@ -98,8 +102,12 @@ function DiffViewer:buildUI()
     }
 
     -- Usage hint
+    local hint_text = _("Tap a row to select: ⬇ Pull = take cloud value · ⬆ Push = send local value")
+    if Categories.isTextValue(self.category) then
+        hint_text = _("Tap a row to select: ⬇ Pull = take cloud file · ⬆ Push = send local file. Hold a row for the full diff.")
+    end
     local hint_widget = TextBoxWidget:new{
-        text = _("Tap a row to select: ⬇ Pull = take cloud value · ⬆ Push = send local value"),
+        text = hint_text,
         face = text_font,
         width = inner_width,
     }
@@ -130,22 +138,28 @@ function DiffViewer:buildUI()
             },
         }
 
-        -- Value previews
-        local local_preview = _('Local:') .. '  '
-            .. Categories.formatValue(self.category, entry.key, entry.local_val)
-        local remote_preview = _('Cloud:') .. '  '
-            .. Categories.formatValue(self.category, entry.key, entry.remote_val)
-
-        local local_val_widget = TextBoxWidget:new{
-            text = local_preview,
-            face = text_font,
-            width = inner_width,
-        }
-        local remote_val_widget = TextBoxWidget:new{
-            text = remote_preview,
-            face = text_font,
-            width = inner_width,
-        }
+        -- Value previews: whole-file categories get a git-style line diff, since a
+        -- one-line preview of a whole configuration file says nothing about what changed.
+        local value_group
+        if Categories.isTextValue(self.category) then
+            value_group = self:buildTextDiff(entry, inner_width)
+        else
+            value_group = VerticalGroup:new{
+                align = "left",
+                TextBoxWidget:new{
+                    text = _('Local:') .. '  '
+                        .. Categories.formatValue(self.category, entry.key, entry.local_val),
+                    face = text_font,
+                    width = inner_width,
+                },
+                TextBoxWidget:new{
+                    text = _('Cloud:') .. '  '
+                        .. Categories.formatValue(self.category, entry.key, entry.remote_val),
+                    face = text_font,
+                    width = inner_width,
+                },
+            }
+        end
 
         -- Selection indicator
         local sel = self.selections[idx]
@@ -167,8 +181,7 @@ function DiffViewer:buildUI()
         -- Wrap row in a tappable group
         local row = VerticalGroup:new{
             key_line,
-            local_val_widget,
-            remote_val_widget,
+            value_group,
             sel_widget,
             VerticalSpan:new{ width = Size.span.vertical_default },
         }
@@ -192,6 +205,18 @@ function DiffViewer:buildUI()
         row_container.onTap = function()
             this:cycleSelection(idx)
             return true
+        end
+        if entry._diff_text then
+            row_container.ges_events.Hold = {
+                GestureRange:new{
+                    ges = "hold",
+                    range = function() return row_container.dimen end,
+                },
+            }
+            row_container.onHold = function()
+                this:showFullDiff(entry)
+                return true
+            end
         end
 
         table.insert(rows, row_container)
@@ -291,6 +316,60 @@ function DiffViewer:buildUI()
         self.frame,
     }
     self.dimen = Screen:getSize()
+end
+
+--- Build the git-style diff block for one whole-file entry, and stash the full unified
+--- diff on the entry so a hold on the row can open it in a viewer.
+function DiffViewer:buildTextDiff(entry, inner_width)
+    local mono_font = Font:getFace("smallinfont")
+    local text_font = Font:getFace("smallinfofont")
+    -- Cached: every tap rebuilds the whole list, and re-aligning a file per row would make
+    -- selecting a change visibly slow.
+    if not entry._diff then
+        local diff = Diff.textDiff(entry.local_val, entry.remote_val)
+        entry._diff = { hunks = Diff.unifiedHunks(diff, DIFF_CONTEXT_LINES),
+                        added = diff.added, removed = diff.removed }
+        entry._diff_text = Diff.unifiedText(entry._diff.hunks)
+    end
+    local hunks = entry._diff.hunks
+
+    local group = VerticalGroup:new{ align = "left" }
+    table.insert(group, TextWidget:new{
+        text = string.format(_("%d lines only local (−) · %d lines only in cloud (+)"),
+            entry._diff.removed, entry._diff.added),
+        face = text_font,
+        max_width = inner_width,
+    })
+    local shown = math.min(#hunks, DIFF_PREVIEW_LINES)
+    for i = 1, shown do
+        local line = hunks[i]
+        local text = line.sign == "@" and line.text or (line.sign .. line.text)
+        table.insert(group, TextWidget:new{
+            -- Tabs render as a single space in TextWidget, which would flatten indentation.
+            text = (text:gsub("\t", "    ")),
+            face = mono_font,
+            max_width = inner_width,
+            fgcolor = line.sign == " " and Blitbuffer.COLOR_DARK_GRAY or Blitbuffer.COLOR_BLACK,
+        })
+    end
+    if #hunks > shown then
+        table.insert(group, TextWidget:new{
+            text = string.format(_("… %d more diff lines, hold to see the whole diff"), #hunks - shown),
+            face = text_font,
+            max_width = inner_width,
+            fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+        })
+    end
+    return group
+end
+
+function DiffViewer:showFullDiff(entry)
+    local TextViewer = require("ui/widget/textviewer")
+    UIManager:show(TextViewer:new{
+        title = string.format(_("Diff: %s"), Categories.keyLabel(self.category, entry.key)),
+        text = entry._diff_text,
+        text_type = "code",
+    })
 end
 
 function DiffViewer:cycleSelection(idx)

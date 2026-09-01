@@ -170,6 +170,18 @@ msgstr "%d 項變更：%d 項修改，%d 項僅本機，%d 項僅雲端"
 msgid "Tap a row to select: ⬇ Pull = take cloud value · ⬆ Push = send local value"
 msgstr "點擊列選擇：⬇ 拉取 = 取雲端值 · ⬆ 推送 = 傳送本機值"
 
+msgid "Tap a row to select: ⬇ Pull = take cloud file · ⬆ Push = send local file. Hold a row for the full diff."
+msgstr "點擊列選擇：⬇ 拉取 = 取雲端檔案 · ⬆ 推送 = 傳送本機檔案。長按可檢視完整差異。"
+
+msgid "%d lines only local (−) · %d lines only in cloud (+)"
+msgstr "%d 行僅本機（−）· %d 行僅雲端（+）"
+
+msgid "… %d more diff lines, hold to see the whole diff"
+msgstr "…尚有 %d 行差異，長按檢視完整差異"
+
+msgid "Diff: %s"
+msgstr "差異：%s"
+
 msgid "⬇ Pull from cloud"
 msgstr "⬇ 從雲端拉取"
 
@@ -381,9 +393,6 @@ msgstr "對該插件手動編輯的設定檔進行整檔案備份，其 API 金�
 
 msgid "File contents"
 msgstr "檔案內容"
-
-msgid "%d bytes, %d lines"
-msgstr "%d 位元組，%d 行"
 
 msgid "The Cloud storage plugin is required for syncing but isn't available."
 msgstr "同步需要雲端儲存外掛，但該外掛無法使用。"
