@@ -132,8 +132,8 @@ msgstr "推送"
 msgid "Pull"
 msgstr "拉取"
 
-msgid "Synced %d settings file(s) successfully."
-msgstr "已成功同步 %d 个设置文件。"
+msgid "Synced %d settings group(s) successfully."
+msgstr "已成功同步 %d 个设置分组。"
 
 #: main.lua - sync now
 msgid "Nothing is selected to sync. Open \"What to sync\" to choose."
@@ -163,8 +163,8 @@ msgstr "逐项选择…"
 msgid "Skip them"
 msgstr "跳过这些项"
 
-msgid "Synced %d file(s), %d failed."
-msgstr "已同步 %d 个文件，%d 个失败。"
+msgid "Synced %d settings group(s), %d failed."
+msgstr "已同步 %d 个设置分组，%d 个失败。"
 
 #: settingsync_ui.lua - diff viewer
 msgid "No differences found between local and cloud settings."
@@ -178,18 +178,6 @@ msgstr "%d 项变更：%d 项修改，%d 项仅本地，%d 项仅云端"
 
 msgid "Tap a row to select: ⬇ Pull = take cloud value · ⬆ Push = send local value"
 msgstr "点击行选择：⬇ 拉取 = 取云端值 · ⬆ 推送 = 发送本地值"
-
-msgid "Tap a row to select: ⬇ Pull = take cloud file · ⬆ Push = send local file. Hold a row for the full diff."
-msgstr "点击行选择：⬇ 拉取 = 取云端文件 · ⬆ 推送 = 发送本地文件。长按查看完整差异。"
-
-msgid "%d lines only local (−) · %d lines only in cloud (+)"
-msgstr "%d 行仅本地（−）· %d 行仅云端（+）"
-
-msgid "… %d more diff lines, hold to see the whole diff"
-msgstr "…还有 %d 行差异，长按查看完整差异"
-
-msgid "Diff: %s"
-msgstr "差异：%s"
 
 msgid "⬇ Pull from cloud"
 msgstr "⬇ 从云端拉取"
@@ -427,15 +415,6 @@ msgstr "自定义默认值"
 msgid "Advanced settings that override KOReader's built-in defaults. New overrides are picked up automatically."
 msgstr "覆盖 KOReader 内置默认值的高级设置。新增的覆盖项会被自动纳入同步。"
 
-msgid "%s configuration file"
-msgstr "%s 配置文件"
-
-msgid "Whole-file backup of this plugin's hand-edited configuration file, which is where its API keys live. Pulling it replaces the local file with Lua the plugin will execute."
-msgstr "对该插件手动编辑的配置文件进行整文件备份，其 API 密钥即保存于此。拉取会用插件将要执行的 Lua 替换本地文件。"
-
-msgid "File contents"
-msgstr "文件内容"
-
 msgid "The Cloud storage plugin is required for syncing but isn't available."
 msgstr "同步需要云存储插件，但该插件不可用。"
 
@@ -450,18 +429,6 @@ msgstr "已保存的密码"
 
 msgid "Logins kept in settings.reader.lua, such as the Calibre password and OPDS server accounts."
 msgstr "settings.reader.lua 中保存的登录信息，例如 Calibre 密码和 OPDS 服务器账号。"
-
-msgid "Style tweaks"
-msgstr "样式微调"
-
-msgid "Your own CSS files from styletweaks/. The setting that switches them on syncs with the reader settings, so both sides stay in step."
-msgstr "来自 styletweaks/ 的自定义 CSS 文件。启用它们的设置项随阅读器设置一同同步，两边始终保持一致。"
-
-msgid "User patches"
-msgstr "用户补丁"
-
-msgid "Lua files from patches/, which KOReader runs at startup. Off by default: pulling one means executing code from your cloud on this device."
-msgstr "来自 patches/ 的 Lua 文件，KOReader 会在启动时执行。默认关闭：拉取意味着在本设备上执行来自云端的代码。"
 
 msgid "Could not read the local file for %s. Skipping it."
 msgstr "无法读取 %s 的本地文件，已跳过。"

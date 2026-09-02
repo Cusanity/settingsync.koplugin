@@ -16,11 +16,6 @@ local Categories = {}
 local SETTINGS_DIR = DataStorage:getSettingsDir()
 local READER_SETTINGS = DataStorage:getDataDir() .. "/settings.reader.lua"
 
--- Raw-file categories expose the whole file under one "__file_content" key. Values are
--- file text, so the diff viewer line-diffs them (Categories.isTextValue) instead of
--- printing a preview of the value.
-local FILE_CONTENT_LABELS = { __file_content = _("File contents") }
-
 -- Key-name patterns that never sync. Applied to every category whose keys are KOReader
 -- setting names (see isExcluded), so a device-specific key upstream adds tomorrow is
 -- dropped by shape instead of needing a hand-maintained list here.
@@ -79,7 +74,7 @@ Categories.GESTURES = {
     label            = _("Gestures"),
     description      = _("Touch gesture action mappings"),
     -- gestures.lua lives in settings/, not the data root, and this plugin only ever
-    -- stores these keys in it, so the whole file can be synced wholesale.
+    -- stores these settings in it, so every key belongs to this category.
     local_path       = DataStorage:getSettingsDir() .. "/gestures.lua",
     remote_name      = "gestures.lua",
     all_keys         = true,
@@ -96,11 +91,6 @@ Categories.GESTURES = {
 --   key_prefix  = { "a_", "b_" }      -- every key starting with any of these prefixes
 --   key_patterns = { "password" }     -- every key matching any of these Lua patterns
 --   all_keys    = true                -- the entire settings file
---
--- Storage modes (see readSettingsData / writeSettingsData in main.lua):
---   (default)          -- a LuaSettings dump, merged key by key
---   raw_file  = true   -- hand-edited source, synced verbatim under "__file_content"
---   dir_files = "%.css$"  -- a directory: key = relative path, value = file contents
 --
 -- UNSYNCABLE_KEY_PATTERNS is applied to every category below without being named; only
 -- keys that are unsyncable *and* not path-shaped need an explicit exclude_keys entry.
@@ -355,30 +345,6 @@ Categories.DEFAULTS_CUSTOM = {
     all_keys           = true,
 }
 
--- `dir_files` categories mirror a whole directory of hand-written files: each key is a
--- path relative to the directory and each value that file's contents, so a tweak or patch
--- added later shows up as a new key with no change here.
-Categories.STYLE_TWEAKS = {
-    id                 = "styletweaks",
-    label              = _("Style tweaks"),
-    description        = _("Your own CSS files from styletweaks/. The setting that switches them on syncs with the reader settings, so both sides stay in step."),
-    local_path         = DataStorage:getDataDir() .. "/styletweaks",
-    remote_name        = "styletweaks.lua",
-    dir_files          = "%.css$",
-    all_keys           = true,
-}
-
-Categories.USER_PATCHES = {
-    id                 = "userpatches",
-    label              = _("User patches"),
-    description        = _("Lua files from patches/, which KOReader runs at startup. Off by default: pulling one means executing code from your cloud on this device."),
-    default_off        = true,
-    local_path         = DataStorage:getDataDir() .. "/patches",
-    remote_name        = "userpatches.lua",
-    dir_files          = "%.lua$",
-    all_keys           = true,
-}
-
 --- All registered categories in display order.
 Categories.ALL = {
     Categories.SCREEN,
@@ -397,15 +363,13 @@ Categories.ALL = {
     Categories.ASSISTANT,
     Categories.STATUS_BAR,
     Categories.WIFI_NETWORKS,
-    Categories.STYLE_TWEAKS,
     Categories.DEFAULTS_CUSTOM,
     Categories.READER_SECRETS,
     Categories.READER_OTHER,
-    Categories.USER_PATCHES,
 }
 
 ----------------------------------------------------------------------
--- Dynamic discovery: plugin settings and configuration files
+-- Dynamic discovery: plugin settings
 ----------------------------------------------------------------------
 
 --- "assistant.koplugin" / "kosync.lua" -> "Assistant" / "Kosync".
@@ -447,76 +411,6 @@ local function isSettingsDump(path)
     end
     f:close()
     return is_dump
-end
-
---- True for the top-level file names a plugin uses for user configuration rather than code:
---- "configuration.lua", "config.lua" and prefixed variants such as
---- "appstore_configuration.lua". The prefixed short form "<plugin>_config.lua" is *not*
---- matched, because that is the usual name for an internal source module
---- (assistant_config.lua), which must never be replaced by a pull. Sample files are skipped:
---- they hold placeholders, not the user's keys.
-local function isPluginConfigFile(name)
-    local stem = name:match("^(.+)%.lua$")
-    if not stem or stem:match("%.sample$") then return false end
-    return stem == "config" or stem == "configuration" or stem:match("_configuration$") ~= nil
-end
-
---- Scan one plugins root directory for `*.koplugin/<config>.lua` files and append a
---- raw-file category for each one, skipping plugins already in `seen` (keyed by folder
---- name, so the same plugin found via multiple roots is only added once).
-local function scanPluginConfigs(root, found, seen)
-    local lfs = require("libs/libkoreader-lfs")
-    if lfs.attributes(root, "mode") ~= "directory" then return end
-    for name in lfs.dir(root) do
-        local plugin_dir = root .. "/" .. name
-        if name:match("%.koplugin$") and not seen[name]
-                and lfs.attributes(plugin_dir, "mode") == "directory" then
-            local plugin_id = name:gsub("%.koplugin$", "")
-            for file in lfs.dir(plugin_dir) do
-                local config_path = plugin_dir .. "/" .. file
-                if isPluginConfigFile(file) and lfs.attributes(config_path, "mode") == "file" then
-                    seen[name] = true
-                    local stem = file:gsub("%.lua$", "")
-                    local slug = stem:sub(1, #plugin_id + 1) == plugin_id .. "_"
-                        and stem or (plugin_id .. "_" .. stem)
-                    table.insert(found, {
-                        id                 = "pluginconfig_" .. slug,
-                        label              = string.format(_("%s configuration file"), readableLabel(name)),
-                        description        = _("Whole-file backup of this plugin's hand-edited configuration file, which is where its API keys live. Pulling it replaces the local file with Lua the plugin will execute."),
-                        local_path         = config_path,
-                        remote_name        = "plugin_configs/" .. slug .. ".lua",
-                        raw_file           = true,
-                        keys               = { "__file_content" },
-                        key_labels         = FILE_CONTENT_LABELS,
-                    })
-                end
-            end
-        end
-    end
-end
-
---- Discover the configuration files shipped by installed plugins (e.g. assistant.koplugin's
---- provider/API-key file, which is where settings like the Tavily search API key normally
---- live). Unlike the static categories above, these are hand-edited Lua source files, not
---- machine-generated LuaSettings dumps, so they're synced as opaque whole files
---- (raw_file = true) instead of being merged key-by-key -- that would require
---- re-serializing the file and would destroy the user's comments. New plugins that ship a
---- configuration file, and new keys added inside an existing one, are picked up
---- automatically with no changes needed here.
-function Categories.discoverPluginConfigs()
-    local found, seen = {}, {}
-
-    scanPluginConfigs(DataStorage:getDataDir() .. "/plugins", found, seen)
-    scanPluginConfigs("plugins", found, seen)
-
-    local extra = G_reader_settings and G_reader_settings:readSetting("extra_plugin_paths")
-    if type(extra) == "string" then extra = { extra } end
-    if type(extra) == "table" then
-        for _, p in ipairs(extra) do scanPluginConfigs(p, found, seen) end
-    end
-
-    table.sort(found, function(a, b) return a.label < b.label end)
-    return found
 end
 
 --- Recursively scan `dir` for unclaimed LuaSettings dumps, appending one category each.
@@ -605,9 +499,6 @@ function Categories.all()
         for _, cat in ipairs(Categories.discoverPluginSettings()) do
             table.insert(all_cache, cat)
         end
-        for _, cat in ipairs(Categories.discoverPluginConfigs()) do
-            table.insert(all_cache, cat)
-        end
     end
     return all_cache
 end
@@ -637,11 +528,9 @@ local function claims(category, key)
 end
 
 --- True when a category's keys are KOReader setting names, and so can be judged by
---- UNSYNCABLE_KEY_PATTERNS. False where the keys mean something else: relative file paths
---- (`dir_files`), the synthetic whole-file key (`raw_file`), or arbitrary user strings such
---- as Wi-Fi SSIDs (`opaque_keys`).
+--- UNSYNCABLE_KEY_PATTERNS. False when keys are arbitrary user strings such as Wi-Fi SSIDs.
 local function usesSettingKeyNames(category)
-    return not (category.dir_files or category.raw_file or category.opaque_keys)
+    return not category.opaque_keys
 end
 
 --- Exclusion rules only: keys a category claims but must never sync.
@@ -701,13 +590,6 @@ end
 -- Falls back to the raw key name if not defined.
 function Categories.keyLabel(category, key)
     return (category and category.key_labels and category.key_labels[key]) or key
-end
-
---- True when a category's values are whole files of text (a hand-edited plugin config, a
---- style tweak, a patch) rather than setting values, so the viewer can line-diff them
---- instead of printing a one-line preview of an entire file.
-function Categories.isTextValue(category)
-    return category ~= nil and (category.raw_file or category.dir_files) ~= nil
 end
 
 --- Format a value for display, using the category's formatter or Diff.prettyValue.

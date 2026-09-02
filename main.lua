@@ -70,20 +70,17 @@ function SettingSync:init()
     self.ui.menu:registerToMainMenu(self)
 end
 
---- All sync categories: the static list plus per-plugin settings and configuration.lua
---- files discovered on disk.
+--- All sync categories: the static list plus per-plugin settings files discovered on disk.
 function SettingSync:getAllCategories()
     return Categories.all()
 end
 
 --- Whether a category is currently selected for sync. Categories the user never saw fall
 --- back to their last "select/deselect all" choice, so plugins installed later inherit it
---- instead of silently switching themselves on. Categories flagged `default_off` (those
---- that pull in code this device will execute) stay off regardless.
+--- instead of silently switching themselves on.
 local function categoryEnabled(scope, category, default_all)
     local choice = scope[category.id]
     if choice ~= nil then return choice ~= false end
-    if category.default_off then return false end
     return default_all ~= false
 end
 
@@ -198,8 +195,6 @@ function SettingSync:buildWhatToSyncMenu()
         self.settings:saveSetting("sync_categories", scope)
         self.settings:flush()
     end
-    -- "All on" is unreachable while any default_off category exists, so the button
-    -- flips on whether *anything* is selected instead.
     local function anyEnabled()
         for _, cat in ipairs(self:getAllCategories()) do
             if isOn(cat) then return true end
@@ -214,7 +209,7 @@ function SettingSync:buildWhatToSyncMenu()
             callback = function(touchmenu_instance)
                 local enable = not anyEnabled()
                 for _, cat in ipairs(self:getAllCategories()) do
-                    scope[cat.id] = enable and not cat.default_off
+                    scope[cat.id] = enable
                 end
                 self.settings:saveSetting("sync_categories", scope)
                 self.settings:saveSetting("sync_categories_default", enable)
@@ -294,56 +289,6 @@ local function ensureTempDir()
     end
 end
 
---- Collect a directory's matching files into { [path relative to dir] = contents }.
-local function readDirFiles(dir, pattern, prefix, out)
-    out = out or {}
-    prefix = prefix or ""
-    if lfs.attributes(dir, "mode") ~= "directory" then return out end
-    for name in lfs.dir(dir) do
-        -- "._" files are macOS resource forks, as KOReader's own tweak scanner skips too.
-        if name ~= "." and name ~= ".." and name:sub(1, 2) ~= "._" then
-            local path = dir .. "/" .. name
-            local mode = lfs.attributes(path, "mode")
-            if mode == "directory" then
-                readDirFiles(path, pattern, prefix .. name .. "/", out)
-            elseif mode == "file" and name:match(pattern) then
-                local f = io.open(path, "r")
-                if f then
-                    out[prefix .. name] = f:read("*a")
-                    f:close()
-                end
-            end
-        end
-    end
-    return out
-end
-
---- The cloud supplies these file names, so anything that could escape the category's
---- directory or change a file of another type is dropped rather than written.
-local function isSafeRelPath(name, pattern)
-    return type(name) == "string"
-        and name:match("^[%w%._%- /]+$") ~= nil
-        and not name:match("%.%.")
-        and not name:match("^/")
-        and name:match(pattern) ~= nil
-end
-
-local function writeDirFiles(dir, pattern, data)
-    local util = require("util")
-    for name, content in pairs(data) do
-        if type(content) == "string" and isSafeRelPath(name, pattern) then
-            local path = dir .. "/" .. name
-            local parent = path:match("(.*)/")
-            if parent and lfs.attributes(parent, "mode") ~= "directory" then
-                util.makePath(parent)
-            end
-            util.writeToFile(content, path, true, true)
-        else
-            logger.warn("SettingSync: refusing to write unexpected file name", name)
-        end
-    end
-end
-
 --- Evaluate a LuaSettings dump as data rather than running it. The file is often a copy
 -- just downloaded from the cloud, and this happens during diffing, before the user has
 -- approved anything -- dofile() would execute it either way. A dump is nothing but
@@ -368,19 +313,11 @@ local function loadDump(path)
     return data
 end
 
---- Read a Lua settings file and return its data table. For `raw_file` categories
--- (hand-edited plugin configuration.lua files) the file is read as opaque text and
--- wrapped under a single "__file_content" key instead of being executed as Lua, so
--- sync never has to parse or regenerate the user's source file. `dir_files` categories
--- read a whole directory into one table keyed by relative path; that only applies to the
--- category's own location, since its downloaded copy is a plain table dump.
+--- Read a Lua settings file and return its data table.
 -- Returns the table plus an `ok` flag. `ok` is false only when the file exists but could
 -- not be read or parsed: callers must then skip the category, since an unreadable file is
 -- indistinguishable from an empty one and writing it back would truncate it.
 local function loadSettingsData(path, category)
-    if category and category.dir_files and path == category.local_path then
-        return readDirFiles(path, category.dir_files), true
-    end
     if path == READER_SETTINGS then
         -- Settings changed this session live only in memory; without this the diff would
         -- be computed against a stale file and the merge would revert them.
@@ -388,16 +325,6 @@ local function loadSettingsData(path, category)
     end
     if lfs.attributes(path, "mode") ~= "file" then
         return {}, true
-    end
-    if category and category.raw_file then
-        local f = io.open(path, "r")
-        if not f then
-            logger.warn("SettingSync: cannot open", path)
-            return {}, false
-        end
-        local content = f:read("*a")
-        f:close()
-        return { __file_content = content }, true
     end
     local data, err = loadDump(path)
     if type(data) == "table" then
@@ -438,27 +365,15 @@ local function readSettingsData(path, category)
     return cached.data, cached.ok
 end
 
---- Write a Lua settings table to a file. For `raw_file` categories, writes the
--- "__file_content" string verbatim instead of dump()-serializing the table, so the
--- user's hand-written comments and formatting survive a pull/push; for `dir_files`
--- categories, writes each entry back as its own file. Files the table no longer mentions
--- are left alone -- a pull adds and updates, it never deletes.
+--- Write a Lua settings table to a file.
 local function writeSettingsData(path, data, category)
     local util = require("util")
     if isSourcePath(path, category) then
         source_cache[path] = { data = data, ok = true }
     end
-    if category and category.dir_files and path == category.local_path then
-        writeDirFiles(path, category.dir_files, data)
-        return
-    end
     local dir = path:match("(.*/)")
     if dir and lfs.attributes(dir, "mode") ~= "directory" then
         lfs.mkdir(dir)
-    end
-    if category and category.raw_file then
-        util.writeToFile(data.__file_content or "", path, true, true)
-        return
     end
     util.writeToFile(dump(data, nil, true), path, true, true)
 end
@@ -490,7 +405,6 @@ end
 -- pull -- the cloud copy is a backup of another device's setup, not an inventory of what
 -- this one is allowed to keep, and the catch-all categories own enough of
 -- settings.reader.lua that deleting by absence would reset the device wholesale.
--- Matches how `dir_files` categories already behave, since writeDirFiles only ever writes.
 -- Returns false without writing if the source file could not be read.
 local function mergeCategoryIntoFile(category, merged_data)
     local path = category.local_path or READER_SETTINGS
@@ -1136,9 +1050,9 @@ function SettingSync:_doQuickSync(direction)
 
     local text
     if fail_count == 0 then
-        text = string.format(_("Synced %d settings file(s) successfully."), success_count)
+        text = string.format(_("Synced %d settings group(s) successfully."), success_count)
     else
-        text = string.format(_("Synced %d file(s), %d failed."), success_count, fail_count)
+        text = string.format(_("Synced %d settings group(s), %d failed."), success_count, fail_count)
     end
     UIManager:show(Notification:new{
         text = text,

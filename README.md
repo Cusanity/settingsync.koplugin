@@ -15,9 +15,8 @@ Synchronize KOReader settings across devices via WebDAV with per-key diff and se
 - **Selective sync** – choose to push or pull individual keys, or bulk push/pull all
 - **WebDAV backend** – works with any WebDAV server (Nextcloud, Synology, etc.)
 - **Nothing left behind** – a catch-all category covers every reader setting no other
-  group claims, and `settings/*.lua`, plugin configuration files, `styletweaks/*.css` and
-  `patches/*.lua` files are discovered on disk, so settings added by a KOReader update or a
-  newly installed plugin sync without waiting for this plugin to be updated
+  group claims, and `settings/*.lua` dumps are discovered on disk, so settings added by a
+  KOReader update or a newly installed plugin sync without waiting for this plugin to be updated
 - **Device-specific exclusions** – paths and per-install state are filtered by name shape
 - **Device overview** – **Devices in cloud…** lists every device profile in the cloud
   folder and what each one has backed up; tap a device to see its groups
@@ -36,7 +35,7 @@ Synchronize KOReader settings across devices via WebDAV with per-key diff and se
 
 1. Open the plugin from the KOReader menu: **☰ → Settings Sync**
 2. Tap **WebDAV server** to configure your server URL, username, and password
-3. Choose your **Sync scope** (global settings, plugin settings, plugin configs)
+3. Choose your **Sync scope** (global settings, plugin settings)
 
 ## Usage
 
@@ -69,15 +68,9 @@ a setting added by a future KOReader release is covered on day one:
 
 Accounts, passwords, Wi-Fi credentials and API keys **do** sync – they are part of the
 setup you want on a new device. They are grouped into their own categories (**Saved
-passwords**, **Saved Wi-Fi networks**, per-plugin settings and configuration files) so you
+passwords**, **Saved Wi-Fi networks**, per-plugin settings) so you
 can switch them off if you would rather not, but they are on by default. Note that this
 means your cloud folder holds them in plain text; keep the WebDAV account private.
-
-## Off by default
-
-| Group | Why |
-|-------|-----|
-| User patches | `patches/*.lua` is executed by KOReader at startup, so pulling one runs code from your cloud on this device |
 
 ## License
 

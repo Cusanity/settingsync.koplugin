@@ -108,7 +108,7 @@ local function propfindNames(url, user, pass)
 end
 
 --- List what a device has uploaded, as remote names relative to its folder
---- ("gestures.lua", "plugin_configs/assistant_configuration.lua"). Sub-folders are walked
+--- ("gestures.lua", "plugin_settings/xray.lua"). Sub-folders are walked
 --- within a request budget, so a stray deep tree in the cloud cannot stall the UI.
 function Devices.listUploads(server, device_name)
     local WebDavApi = require("webdavapi")
