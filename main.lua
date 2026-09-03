@@ -27,6 +27,11 @@ local Devices = require("settingsync_devices")
 local Diff = require("settingsync_diff")
 local DiffViewer = require("settingsync_ui")
 
+-- Prioritize SettingSync in the Tools menu without a generic helper module name that can
+-- collide with another plugin in Lua's global package.loaded cache.
+table.insert(require("ui/elements/reader_menu_order").tools, 1, "settingsync")
+table.insert(require("ui/elements/filemanager_menu_order").tools, 1, "settingsync")
+
 local SETTINGS_DIR = DataStorage:getSettingsDir()
 local DATA_DIR = DataStorage:getDataDir()
 local PLUGIN_SETTINGS_PATH = SETTINGS_DIR .. "/settingsync.lua"
@@ -1310,7 +1315,5 @@ function SettingSync:_reviewConflicts(items, conflicts)
     self.settings:flush()
     self:showDiffChain(all_diffs, 1)
 end
-
-require("insert_menu")
 
 return SettingSync

@@ -42,8 +42,10 @@ choose which individual keys to push or pull before applying changes.
   paths like `devices/{device_name}/{remote_name}`. `Devices.listFromCloud()` discovers
   device names by listing the `devices/` folder on the WebDAV server, and
   `Devices.listUploads()` lists one device's uploaded files.
-- `insert_menu.lua` — injects the `"settingsync"` entry into both the File Manager and
-  Reader tool menus, after the `"statistics"` item.
+- `main.lua` inserts the `"settingsync"` entry at the top of both the File Manager and
+  Reader tool-menu order arrays during module loading, following X-Ray's pattern. Keep
+  this inline: a generic `require("insert_menu")` collides with other plugins through
+  Lua's global `package.loaded` cache.
 - `settingsync_gettext.lua` — pure-Lua gettext subset (adapted from `assistant.koplugin`).
   Loads `.po` files from `l10n/` at runtime.
 - `l10n/zh_CN/koreader.po`, `l10n/zh_TW/koreader.po` — Simplified and Traditional Chinese
