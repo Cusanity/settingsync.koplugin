@@ -45,11 +45,11 @@ local function trimPartialUtf8(s)
     return s:sub(1, #s - #tail)
 end
 
---- Produce a human-readable preview of a value.
+--- Produce a human-readable rendering of a value.
 -- Tables are serialized via dump(); scalars are tostring()'d.
--- Long strings are truncated.
+-- Values are complete by default; callers may request an explicit byte limit.
 -- @param val any
--- @param max_len number  (optional, default 120)
+-- @param max_len number  (optional)
 -- @return string
 function Diff.prettyValue(val, max_len)
     local s
@@ -60,13 +60,100 @@ function Diff.prettyValue(val, max_len)
     else
         s = tostring(val)
     end
-    -- Collapse to single line for display
-    s = s:gsub("\n%s*", " ")
-    max_len = max_len or 120
-    if #s > max_len then
+    if max_len and #s > max_len then
         s = trimPartialUtf8(s:sub(1, max_len)) .. "…"
     end
     return s
+end
+
+local json
+
+local function decodeJsonTable(val)
+    if type(val) ~= "string" or not val:match("^%s*[%[{]") then return nil end
+    if not json then
+        local ok, module = pcall(require, "json")
+        if not ok then return nil end
+        json = module
+    end
+    local ok, decoded = pcall(json.decode, val)
+    if ok and type(decoded) == "table" then return decoded end
+end
+
+--- Return values normalized for structured display and whether either is table-shaped.
+-- JSON strings are decoded only for rendering; sync operations retain the originals.
+function Diff.displayValues(local_val, remote_val)
+    local local_display = type(local_val) == "table" and local_val or decodeJsonTable(local_val)
+    local remote_display = type(remote_val) == "table" and remote_val or decodeJsonTable(remote_val)
+    local structured = local_display ~= nil or remote_display ~= nil
+    return local_display or local_val, remote_display or remote_val, structured
+end
+
+local function sortedUnionKeys(a, b)
+    local keys = {}
+    local seen = {}
+    for key in pairs(a or {}) do
+        seen[key] = true
+        table.insert(keys, key)
+    end
+    for key in pairs(b or {}) do
+        if not seen[key] then table.insert(keys, key) end
+    end
+    table.sort(keys, function(left, right)
+        if type(left) == type(right) and (type(left) == "number" or type(left) == "string") then
+            return left < right
+        end
+        return type(left) .. tostring(left) < type(right) .. tostring(right)
+    end)
+    return keys
+end
+
+local function appendPath(path, key)
+    if type(key) == "string" and key:match("^[%a_][%w_]*$") then
+        return path == "" and key or path .. "." .. key
+    end
+    local segment = type(key) == "string" and string.format("%q", key) or tostring(key)
+    return path .. "[" .. segment .. "]"
+end
+
+local function appendValueRows(rows, local_val, remote_val, path)
+    if Diff.deepEqual(local_val, remote_val) then return end
+    local local_is_table = type(local_val) == "table"
+    local remote_is_table = type(remote_val) == "table"
+    if local_is_table and remote_is_table
+            or local_is_table and remote_val == nil
+            or remote_is_table and local_val == nil then
+        local keys = sortedUnionKeys(
+            local_is_table and local_val or nil,
+            remote_is_table and remote_val or nil)
+        if #keys == 0 then
+            table.insert(rows, {
+                path = path,
+                local_val = local_val,
+                remote_val = remote_val,
+            })
+            return
+        end
+        for _, key in ipairs(keys) do
+            appendValueRows(rows,
+                local_is_table and local_val[key] or nil,
+                remote_is_table and remote_val[key] or nil,
+                appendPath(path, key))
+        end
+        return
+    end
+    table.insert(rows, {
+        path = path,
+        local_val = local_val,
+        remote_val = remote_val,
+    })
+end
+
+--- Flatten table-shaped values into aligned leaf rows for side-by-side display.
+-- Both sides use the same nested key path; unchanged leaves are omitted.
+function Diff.valueRows(local_val, remote_val)
+    local rows = {}
+    appendValueRows(rows, local_val, remote_val, "")
+    return rows
 end
 
 --- Compare two settings tables and return a list of per-key diff entries.

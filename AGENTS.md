@@ -461,11 +461,13 @@ When editing `DiffViewer` in `settingsync_ui.lua`:
     do not call `UIManager:close` / `UIManager:show` without this save/restore pattern.
 16. Status icon order: `≠` for MODIFIED, `↑` for ADDED (local only), `↓` for REMOVED
     (cloud only). Do not revert to `+` / `−` — the directional arrows are intentional.
+17. Lua tables and JSON object/array strings use the same changed-only, side-by-side key
+  display. JSON decoding is display-only: selections must retain the original strings.
 
 When adding UI strings:
 
-17. Wrap with `_()` and add to both `l10n/zh_CN/koreader.po` and `l10n/zh_TW/koreader.po`.
-18. **Run `python check_i18n.py` and fix all errors before committing.**
+18. Wrap with `_()` and add to both `l10n/zh_CN/koreader.po` and `l10n/zh_TW/koreader.po`.
+19. **Run `python check_i18n.py` and fix all errors before committing.**
     Exit 0 = clean. Any missing msgid is a hard blocker.
 
 

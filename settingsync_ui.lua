@@ -14,6 +14,7 @@ local FrameContainer = require("ui/widget/container/framecontainer")
 local Geom = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
+local HorizontalSpan = require("ui/widget/horizontalspan")
 local InfoMessage = require("ui/widget/infomessage")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local LineWidget = require("ui/widget/linewidget")
@@ -75,6 +76,56 @@ function DiffViewer:buildUI()
     local padding = Size.padding.default
     local inner_width = self.width - padding * 2
 
+    local function sideBySideValues(local_val, remote_val)
+        local separator_width = Size.line.thin
+        local gap_width = Size.padding.default
+        local values_width = inner_width - separator_width - gap_width * 2
+        local local_width = math.floor(values_width / 2)
+        local remote_width = values_width - local_width
+        local value_rows = VerticalGroup:new{ align = "left" }
+
+        local function columns(local_text, remote_text, face)
+            local local_widget = TextBoxWidget:new{
+                text = local_text,
+                face = face,
+                width = local_width,
+            }
+            local remote_widget = TextBoxWidget:new{
+                text = remote_text,
+                face = face,
+                width = remote_width,
+            }
+            local row_height = math.max(local_widget:getSize().h, remote_widget:getSize().h)
+            return HorizontalGroup:new{
+                align = "top",
+                local_widget,
+                HorizontalSpan:new{ width = gap_width },
+                LineWidget:new{
+                    dimen = Geom:new{ w = separator_width, h = row_height },
+                    background = Blitbuffer.COLOR_GRAY,
+                },
+                HorizontalSpan:new{ width = gap_width },
+                remote_widget,
+            }
+        end
+
+        table.insert(value_rows, columns(_("Local:"), _("Cloud:"), key_font))
+        for _, value_row in ipairs(Diff.valueRows(local_val, remote_val)) do
+            if value_row.path ~= "" then
+                table.insert(value_rows, TextBoxWidget:new{
+                    text = value_row.path,
+                    face = key_font,
+                    width = inner_width,
+                })
+            end
+            table.insert(value_rows, columns(
+                Categories.formatValue(nil, nil, value_row.local_val),
+                Categories.formatValue(nil, nil, value_row.remote_val),
+                text_font))
+        end
+        return value_rows
+    end
+
     -- Title bar
     local title_text = self.source_label or _("Settings Diff")
     local title_widget = TextWidget:new{
@@ -132,21 +183,28 @@ function DiffViewer:buildUI()
             },
         }
 
-        local value_group = VerticalGroup:new{
-            align = "left",
-            TextBoxWidget:new{
-                text = _('Local:') .. '  '
-                    .. Categories.formatValue(self.category, entry.key, entry.local_val),
-                face = text_font,
-                width = inner_width,
-            },
-            TextBoxWidget:new{
-                text = _('Cloud:') .. '  '
-                    .. Categories.formatValue(self.category, entry.key, entry.remote_val),
-                face = text_font,
-                width = inner_width,
-            },
-        }
+        local local_display, remote_display, structured =
+            Diff.displayValues(entry.local_val, entry.remote_val)
+        local value_group
+        if structured then
+            value_group = sideBySideValues(local_display, remote_display)
+        else
+            value_group = VerticalGroup:new{
+                align = "left",
+                TextBoxWidget:new{
+                    text = _('Local:') .. '  '
+                        .. Categories.formatValue(self.category, entry.key, entry.local_val),
+                    face = text_font,
+                    width = inner_width,
+                },
+                TextBoxWidget:new{
+                    text = _('Cloud:') .. '  '
+                        .. Categories.formatValue(self.category, entry.key, entry.remote_val),
+                    face = text_font,
+                    width = inner_width,
+                },
+            }
+        end
 
         -- Selection indicator
         local sel = self.selections[idx]
@@ -298,6 +356,11 @@ function DiffViewer:buildUI()
         self.frame,
     }
     self.dimen = Screen:getSize()
+end
+
+function DiffViewer:onShow()
+    UIManager:setDirty(nil, "full")
+    return true
 end
 
 function DiffViewer:cycleSelection(idx)
