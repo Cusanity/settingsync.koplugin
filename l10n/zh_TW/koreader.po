@@ -76,6 +76,12 @@ msgstr "強制下載 — 覆蓋本裝置"
 msgid "Nothing available to restore"
 msgstr "沒有可還原的內容"
 
+msgid "No backups from other devices were found in the cloud."
+msgstr "雲端找不到其他裝置的備份。"
+
+msgid "Could not download %s from device %s."
+msgstr "無法下載 %s（裝置：%s）。"
+
 #: main.lua - cloud config dialog
 msgid "Cloud service:\n%1\n\nSync folder:\n%2"
 msgstr "雲端服務：\n%1\n\n同步目錄：\n%2"
@@ -283,6 +289,9 @@ msgid "(none)"
 msgstr "（無）"
 
 #: main.lua - device and category sync
+msgid "Device name saved."
+msgstr "裝置名稱已儲存。"
+
 msgid "Device name"
 msgstr "裝置名稱"
 
@@ -290,10 +299,13 @@ msgid "Save"
 msgstr "儲存"
 
 msgid "e.g. Kindle PW5"
-msgstr "例如：Kindle PW5"
+msgstr "例如 Kindle PW5"
 
-msgid "Device name saved."
-msgstr "裝置名稱已儲存。"
+msgid "Enter a custom name…"
+msgstr "輸入自訂名稱…"
+
+msgid "Select this device"
+msgstr "選擇本裝置"
 
 msgid "Devices in cloud…"
 msgstr "雲端裝置…"
@@ -324,9 +336,6 @@ msgstr "該裝置尚未上傳任何內容。"
 
 msgid "Sync: %s"
 msgstr "同步：%s"
-
-msgid "My backup (%s)"
-msgstr "我的備份 (%s)"
 
 msgid "Select source device"
 msgstr "選擇來源裝置"

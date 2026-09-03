@@ -64,7 +64,7 @@ SettingSync
 ├── {status line}               (enabled=false info: "Not set up yet" /
 │                                "Not synced yet" / "Last synced: …")   [separator]
 ├── Cloud account: {name}       (tap → configure; text_func)
-├── This device: {name}         (tap → rename; text_func)
+├── This device: {name}         (tap → select cloud profile or enter a name; text_func)
 ├── Devices in cloud…           (showCloudDevices — every profile in devices/) [separator]
 ├── What to sync ▸              (buildWhatToSyncMenu — group toggles)    [separator]
 └── Advanced ▸                  (buildAdvancedMenu)
@@ -355,7 +355,8 @@ Device profiles are managed by `settingsync_devices.lua`:
   groups it has backed up; tapping a row lists them by category label
   (`SettingSync:remoteLabel()` maps `remote_name` → label, falling back to the file name
   for plugins this device does not have).
-- Users set their device name via **Device: {name}** in the SettingSync menu.
+- Users set their device identity via **This device: {name}** in the SettingSync menu.
+  The selector lists profiles discovered in the cloud and also offers free-text entry.
 
 ## Diff / apply contract
 

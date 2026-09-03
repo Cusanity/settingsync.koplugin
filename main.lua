@@ -150,7 +150,9 @@ function SettingSync:buildMainMenu()
                 return _("This device: ") .. Devices.currentName(self.settings)
             end,
             keep_menu_open = true,
-            callback = function() self:showDeviceNameDialog() end,
+            callback = function(touchmenu_instance)
+                self:showDeviceSelector(touchmenu_instance)
+            end,
         },
         {
             text = _("Devices in cloud…"),
@@ -423,8 +425,69 @@ local function mergeCategoryIntoFile(category, merged_data)
 end
 
 
---- Show the InputDialog for setting/changing the device name.
-function SettingSync:showDeviceNameDialog()
+--- Select this device's identity from cloud profiles or enter a custom name.
+function SettingSync:showDeviceSelector(touchmenu_instance)
+    local server = self.settings:readSetting("sync_server")
+    if not server then
+        self:showDeviceNameDialog(touchmenu_instance)
+        return
+    end
+
+    NetworkMgr:runWhenOnline(function()
+        UIManager:show(InfoMessage:new{
+            text = _("Reading device list from cloud…"),
+            timeout = 1,
+        })
+        UIManager:scheduleIn(0.5, function()
+            local names = Devices.listFromCloud(server)
+            local current = Devices.currentName(self.settings)
+            local buttons = {}
+            for _i, name in ipairs(names) do
+                local selected_name = name
+                table.insert(buttons, {
+                    {
+                        text = selected_name == current
+                            and string.format(_("%s (this device)"), selected_name)
+                            or selected_name,
+                        callback = function()
+                            Devices.setName(self.settings, selected_name)
+                            UIManager:close(self._device_selector)
+                            if touchmenu_instance then touchmenu_instance:updateItems() end
+                            UIManager:show(Notification:new{
+                                text = _("Device name saved."),
+                                timeout = 2,
+                            })
+                        end,
+                    },
+                })
+            end
+            table.insert(buttons, {
+                {
+                    text = _("Enter a custom name…"),
+                    callback = function()
+                        UIManager:close(self._device_selector)
+                        self:showDeviceNameDialog(touchmenu_instance)
+                    end,
+                },
+            })
+            table.insert(buttons, {
+                {
+                    text = _("Cancel"),
+                    callback = function() UIManager:close(self._device_selector) end,
+                },
+            })
+
+            self._device_selector = ButtonDialog:new{
+                title = _("Select this device"),
+                buttons = buttons,
+            }
+            UIManager:show(self._device_selector)
+        end)
+    end)
+end
+
+--- Show the free-text fallback for creating or renaming a device profile.
+function SettingSync:showDeviceNameDialog(touchmenu_instance)
     local current = Devices.currentName(self.settings)
     local dialog
     dialog = InputDialog:new{
@@ -442,14 +505,14 @@ function SettingSync:showDeviceNameDialog()
                     is_enter_default = true,
                     callback = function()
                         local name = dialog:getInputText()
-                        name = name and name:match("^%s*(.-)%s*$")  -- trim
-                        -- empty → reset to default
+                        name = name and name:match("^%s*(.-)%s*$")
                         Devices.setName(self.settings, (name ~= "") and name or nil)
+                        UIManager:close(dialog)
+                        if touchmenu_instance then touchmenu_instance:updateItems() end
                         UIManager:show(Notification:new{
                             text = _("Device name saved."),
                             timeout = 2,
                         })
-                        UIManager:close(dialog)
                     end,
                 },
             },
@@ -525,17 +588,6 @@ function SettingSync:showDevicePicker(available_devices, callback)
     local my_name = Devices.currentName(self.settings)
     local buttons = {}
 
-    -- Always offer "My backup" as first option.
-    table.insert(buttons, {
-        {
-            text = string.format(_("My backup (%s)"), my_name),
-            callback = function()
-                UIManager:close(self._device_picker)
-                callback(my_name)
-            end,
-        },
-    })
-
     for _, name in ipairs(available_devices) do
         if name ~= my_name then
             local n = name  -- capture
@@ -572,23 +624,29 @@ function SettingSync:syncCategory(category)
         local server = self.settings:readSetting("sync_server")
         if not server then return end
 
-        local devices = Devices.listFromCloud(server)
-        local my_name = Devices.currentName(self.settings)
+        UIManager:show(InfoMessage:new{
+            text = _("Reading device list from cloud…"),
+            timeout = 1,
+        })
+        UIManager:scheduleIn(0.5, function()
+            local devices = Devices.listFromCloud(server)
+            local my_name = Devices.currentName(self.settings)
+            local others = {}
+            for _, name in ipairs(devices) do
+                if name ~= my_name then table.insert(others, name) end
+            end
 
-        -- If there are other devices available, let the user pick the source.
-        local others = {}
-        for _, n in ipairs(devices) do
-            if n ~= my_name then table.insert(others, n) end
-        end
-
-        if #others > 0 then
-            self:showDevicePicker(devices, function(target)
+            if #others == 0 then
+                UIManager:show(InfoMessage:new{
+                    text = _("No backups from other devices were found in the cloud."),
+                    timeout = 3,
+                })
+                return
+            end
+            self:showDevicePicker(others, function(target)
                 self:_doCategorySync(category, target)
             end)
-        else
-            -- No other devices: compare against own backup.
-            self:_doCategorySync(category, my_name)
-        end
+        end)
     end)
 end
 
@@ -606,11 +664,20 @@ function SettingSync:_doCategorySync(category, target_device_name)
     UIManager:scheduleIn(0.5, function()
         resetSourceCache()
         local ok = self:downloadFromCloud(remote_path, temp_path)
+        if not ok then
+            os.remove(temp_path)
+            UIManager:show(InfoMessage:new{
+                text = string.format(_("Could not download %s from device %s."),
+                    category.label, target_device_name),
+                timeout = 3,
+            })
+            return
+        end
 
         -- Extract local category data from the category's source file
         local source_path = category.local_path or READER_SETTINGS
         local full_local, readable = readSettingsData(source_path, category)
-        local remote_data = ok and Categories.extract(readSettingsData(temp_path, category), category) or {}
+        local remote_data = Categories.extract(readSettingsData(temp_path, category), category)
         os.remove(temp_path)
         if not readable then
             UIManager:show(InfoMessage:new{

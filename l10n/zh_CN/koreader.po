@@ -76,6 +76,12 @@ msgstr "强制下载 — 覆盖本设备"
 msgid "Nothing available to restore"
 msgstr "没有可恢复的内容"
 
+msgid "No backups from other devices were found in the cloud."
+msgstr "云端未找到其他设备的备份。"
+
+msgid "Could not download %s from device %s."
+msgstr "无法下载 %s（设备：%s）。"
+
 #: main.lua - cloud config dialog
 msgid "Cloud service:\n%1\n\nSync folder:\n%2"
 msgstr "云服务：\n%1\n\n同步目录：\n%2"
@@ -283,6 +289,9 @@ msgid "(none)"
 msgstr "（无）"
 
 #: main.lua - device and category sync
+msgid "Device name saved."
+msgstr "设备名称已保存。"
+
 msgid "Device name"
 msgstr "设备名称"
 
@@ -290,10 +299,13 @@ msgid "Save"
 msgstr "保存"
 
 msgid "e.g. Kindle PW5"
-msgstr "例如：Kindle PW5"
+msgstr "例如 Kindle PW5"
 
-msgid "Device name saved."
-msgstr "设备名称已保存。"
+msgid "Enter a custom name…"
+msgstr "输入自定义名称…"
+
+msgid "Select this device"
+msgstr "选择本设备"
 
 msgid "Devices in cloud…"
 msgstr "云端设备…"
@@ -324,9 +336,6 @@ msgstr "该设备尚未上传任何内容。"
 
 msgid "Sync: %s"
 msgstr "同步：%s"
-
-msgid "My backup (%s)"
-msgstr "我的备份 (%s)"
 
 msgid "Select source device"
 msgstr "选择来源设备"
